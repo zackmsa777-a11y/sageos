@@ -1,0 +1,280 @@
+#!/bin/bash
+# sage-pkg — SageOS mission-pack installer
+# Wraps apt-get with curated cybersecurity tool categories.
+# type: apt (Debian packages) | builtin (pre-baked, can't be removed/rebuilt live)
+#     | fetch (downloaded on demand from upstream GitHub releases)
+
+CONF="/usr/local/share/sage-pkg/categories.conf"
+FETCH_CONF="/usr/local/share/sage-pkg/fetch-tools.conf"
+DESC_CONF="/usr/local/share/sage-pkg/tool-descriptions.conf"
+STATE_DIR="/var/lib/sage-pkg"
+mkdir -p "$STATE_DIR"
+
+CYAN='\033[36m'; MAG='\033[35m'; YEL='\033[33m'; GRN='\033[32m'; RED='\033[31m'; BOLD='\033[1m'; RST='\033[0m'
+
+usage() {
+    echo -e "${BOLD}sage-pkg${RST} — SageOS mission-pack installer"
+    echo ""
+    echo "Usage:"
+    echo "  sage-pkg list                    List all available categories"
+    echo "  sage-pkg show <category>         Show tools in a category"
+    echo "  sage-pkg tools [category]        List tools with what they do"
+    echo "  sage-pkg install <category|all>  Install a category (or every category)"
+    echo "  sage-pkg remove <category|all>   Remove a category (or every category)"
+    echo "  sage-pkg status                  Show which categories are installed"
+    echo "  sage-pkg check [category]        Verify tools are actually present/working"
+    echo "  sage-pkg search <term>            Search all categories for a tool"
+    exit 1
+}
+
+get_field() { echo "$1" | cut -d'|' -f"$2"; }
+
+find_category() {
+    grep -v "^#" "$CONF" | grep -v "^$" | awk -F'|' -v c="$1" '$1==c'
+}
+
+all_categories() {
+    grep -v "^#" "$CONF" | grep -v "^$" | cut -d'|' -f1
+}
+
+tool_desc() {
+    local t="$1"
+    local line; line=$(grep -v "^#" "$DESC_CONF" | awk -F'|' -v t="$t" '$1==t')
+    if [[ -n "$line" ]]; then echo "$line" | cut -d'|' -f2; else echo "(no description yet)"; fi
+}
+
+cmd_list() {
+    echo -e "${BOLD}${CYAN}SageOS Mission Packs${RST}"
+    echo ""
+    while IFS='|' read -r cat name desc pkgs type; do
+        [[ "$cat" =~ ^#.*$ || -z "$cat" ]] && continue
+        count=$(echo "$pkgs" | wc -w)
+        installed=""
+        [[ -f "$STATE_DIR/$cat.installed" ]] && installed=" ${GRN}[installed]${RST}"
+        tag=""
+        [[ "$type" == "builtin" ]] && tag=" ${YEL}[pre-installed]${RST}"
+        [[ "$type" == "fetch" ]] && tag=" ${CYAN}[downloads on install]${RST}"
+        echo -e "  ${MAG}${cat}${RST} — ${name} (${count} tools)${installed}${tag}"
+        echo "      $desc"
+    done < "$CONF"
+    echo ""
+    echo "Run 'sage-pkg tools <category>' to see what each tool does, or 'sage-pkg install <category>' to install."
+}
+
+cmd_show() {
+    local row; row=$(find_category "$1")
+    [[ -z "$row" ]] && { echo "Unknown category: $1"; echo "Run 'sage-pkg list' to see options."; exit 1; }
+    local name desc pkgs type
+    name=$(get_field "$row" 2); desc=$(get_field "$row" 3); pkgs=$(get_field "$row" 4); type=$(get_field "$row" 5)
+    echo -e "${BOLD}${CYAN}$name${RST} — $desc"
+    [[ "$type" == "builtin" ]] && echo -e "${YEL}(pre-installed — no network needed)${RST}"
+    [[ "$type" == "fetch" ]] && echo -e "${CYAN}(downloaded from upstream on install — needs internet)${RST}"
+    echo ""
+    for p in $pkgs; do echo "  - $p"; done
+}
+
+cmd_tools() {
+    local target="$1"
+    echo -e "${BOLD}${CYAN}SageOS Tools${RST}"
+    while IFS='|' read -r cat name desc pkgs type; do
+        [[ "$cat" =~ ^#.*$ || -z "$cat" ]] && continue
+        [[ -n "$target" && "$cat" != "$target" ]] && continue
+        echo ""
+        echo -e "${BOLD}${MAG}$name${RST} ($cat)"
+        for p in $pkgs; do
+            local mark="${RED}✗${RST}"
+            if [[ "$type" == "apt" ]]; then
+                dpkg -s "$p" >/dev/null 2>&1 && mark="${GRN}✓${RST}"
+            else
+                command -v "$p" >/dev/null 2>&1 && mark="${GRN}✓${RST}"
+            fi
+            echo -e "  $mark ${BOLD}$p${RST} — $(tool_desc "$p")"
+        done
+    done < "$CONF"
+}
+
+fetch_one() {
+    local tool="$1"
+    local row; row=$(grep -v "^#" "$FETCH_CONF" | awk -F'|' -v t="$tool" '$1==t')
+    if [[ -z "$row" ]]; then echo -e "  ${RED}no fetch recipe for $tool${RST}"; return 1; fi
+    local repo pattern; repo=$(echo "$row" | cut -d'|' -f2); pattern=$(echo "$row" | cut -d'|' -f3)
+    echo "  Fetching $tool from $repo..."
+    local api="https://api.github.com/repos/$repo/releases/latest"
+    local url; url=$(curl -sL "$api" | grep -oP '"browser_download_url":\s*"\K[^"]+' | grep -P "$pattern" | head -1)
+    if [[ -z "$url" ]]; then echo -e "  ${RED}could not find a release asset for $tool${RST}"; return 1; fi
+    local tmp; tmp=$(mktemp -d)
+    local fname="$tmp/asset"
+    if ! curl -sL "$url" -o "$fname"; then echo -e "  ${RED}download failed for $tool${RST}"; find "$tmp" -delete; return 1; fi
+    local ex="$tmp/extract"; mkdir -p "$ex"
+    if [[ "$url" == *.zip ]]; then
+        unzip -o -q "$fname" -d "$ex"
+    else
+        tar xzf "$fname" -C "$ex" 2>/dev/null
+    fi
+    # handle nested archive (e.g. a .tar.gz inside a .zip)
+    local nested; nested=$(find "$ex" -name "*.tar.gz" -type f | head -1)
+    [[ -n "$nested" ]] && tar xzf "$nested" -C "$ex" 2>/dev/null
+    local bin; bin=$(find "$ex" -type f -iname "$tool" | head -1)
+    if [[ -z "$bin" ]]; then echo -e "  ${RED}binary '$tool' not found inside archive${RST}"; find "$tmp" -delete; return 1; fi
+    install -m 755 "$bin" "/usr/local/bin/$tool"
+    find "$tmp" -delete
+    echo -e "  ${GRN}installed${RST} $tool"
+    return 0
+}
+
+cmd_install_one() {
+    local cat="$1"
+    local row; row=$(find_category "$cat")
+    [[ -z "$row" ]] && { echo "Unknown category: $cat"; echo "Run 'sage-pkg list' to see options."; return 1; }
+    local name pkgs type
+    name=$(get_field "$row" 2); pkgs=$(get_field "$row" 4); type=$(get_field "$row" 5)
+
+    if [[ "$type" == "builtin" ]]; then
+        echo -e "${BOLD}Mission pack:${RST} $name"
+        echo -e "${YEL}These tools are pre-built and already shipped in the ISO — nothing to download.${RST}"
+        local missing=0
+        for p in $pkgs; do
+            command -v "$p" >/dev/null 2>&1 || { echo "  not found: $p (unexpected — please report this)"; missing=1; }
+        done
+        [[ "$missing" == "0" ]] && { touch "$STATE_DIR/$cat.installed"; echo -e "${GRN}Done.${RST} '$name' tools are ready to use."; } || return 1
+        return 0
+    fi
+
+    if [[ "$type" == "fetch" ]]; then
+        echo -e "${BOLD}Mission pack:${RST} $name"
+        echo -e "${CYAN}Downloading prebuilt binaries from upstream releases...${RST}"
+        local fail=0
+        for p in $pkgs; do fetch_one "$p" || fail=1; done
+        if [[ "$fail" == "0" ]]; then
+            touch "$STATE_DIR/$cat.installed"
+            echo -e "${GRN}Done.${RST} '$name' tools are ready to use."
+        else
+            echo -e "${RED}Some tools failed to download — check your network and try again.${RST}"
+            return 1
+        fi
+        return 0
+    fi
+
+    echo -e "${BOLD}Installing mission pack:${RST} $name"
+    echo "Packages: $pkgs"
+    echo ""
+    if DEBIAN_FRONTEND=noninteractive apt-get install -y $pkgs; then
+        touch "$STATE_DIR/$cat.installed"
+        echo -e "${GRN}Done.${RST} '$name' tools are ready to use."
+    else
+        echo "Install failed — check your network connection and try again."
+        return 1
+    fi
+}
+
+cmd_remove_one() {
+    local cat="$1"
+    local row; row=$(find_category "$cat")
+    [[ -z "$row" ]] && { echo "Unknown category: $cat"; return 1; }
+    local name pkgs type; name=$(get_field "$row" 2); pkgs=$(get_field "$row" 4); type=$(get_field "$row" 5)
+    if [[ "$type" == "builtin" ]]; then
+        echo "'$cat' is a builtin pack baked into the base ISO and can't be removed at runtime."
+        return 1
+    fi
+    if [[ "$type" == "fetch" ]]; then
+        echo -e "${BOLD}Removing mission pack:${RST} $name"
+        for p in $pkgs; do
+            if [[ -f "/usr/local/bin/$p" ]]; then find "/usr/local/bin/$p" -delete; echo "  removed $p"; fi
+        done
+        rm -f "$STATE_DIR/$cat.installed"
+        echo -e "${GRN}Done.${RST}"
+        return 0
+    fi
+    echo -e "${BOLD}Removing mission pack:${RST} $name"
+    DEBIAN_FRONTEND=noninteractive apt-get remove -y $pkgs
+    rm -f "$STATE_DIR/$cat.installed"
+}
+
+cmd_install() {
+    if [[ "$1" == "all" ]]; then
+        local fail=0
+        for cat in $(all_categories); do
+            echo -e "${BOLD}${CYAN}=== $cat ===${RST}"
+            cmd_install_one "$cat" || fail=1
+            echo ""
+        done
+        [[ "$fail" == "0" ]] && echo -e "${GRN}All mission packs installed.${RST}" || echo -e "${YEL}Finished — some packs had issues, see above.${RST}"
+        return
+    fi
+    cmd_install_one "$1"
+}
+
+cmd_remove() {
+    if [[ "$1" == "all" ]]; then
+        for cat in $(all_categories); do
+            [[ -f "$STATE_DIR/$cat.installed" ]] || continue
+            local row type; row=$(find_category "$cat"); type=$(get_field "$row" 5)
+            [[ "$type" == "builtin" ]] && continue
+            echo -e "${BOLD}${CYAN}=== $cat ===${RST}"
+            cmd_remove_one "$cat"
+            echo ""
+        done
+        echo -e "${GRN}All removable mission packs removed.${RST}"
+        return
+    fi
+    cmd_remove_one "$1"
+}
+
+cmd_status() {
+    echo -e "${BOLD}Installed mission packs:${RST}"
+    local any=0
+    while IFS='|' read -r cat name desc pkgs type; do
+        [[ "$cat" =~ ^#.*$ || -z "$cat" ]] && continue
+        if [[ -f "$STATE_DIR/$cat.installed" ]]; then
+            echo -e "  ${GRN}yes${RST} $cat — $name"
+            any=1
+        fi
+    done < "$CONF"
+    [[ "$any" == "0" ]] && echo "  (none yet — run 'sage-pkg list' to see options)"
+}
+
+cmd_check() {
+    local target="$1"
+    while IFS='|' read -r cat name desc pkgs type; do
+        [[ "$cat" =~ ^#.*$ || -z "$cat" ]] && continue
+        [[ -n "$target" && "$cat" != "$target" ]] && continue
+        local total=0 present=0
+        for p in $pkgs; do
+            total=$((total+1))
+            if [[ "$type" == "apt" ]]; then
+                dpkg -s "$p" >/dev/null 2>&1 && present=$((present+1))
+            else
+                command -v "$p" >/dev/null 2>&1 && present=$((present+1))
+            fi
+        done
+        local verdict="${RED}not installed${RST}"
+        [[ "$present" -eq "$total" ]] && verdict="${GRN}fully installed ($present/$total)${RST}"
+        [[ "$present" -gt 0 && "$present" -lt "$total" ]] && verdict="${YEL}partially installed ($present/$total)${RST}"
+        echo -e "  ${MAG}$cat${RST} — $name: $verdict"
+        if [[ "$present" -eq "$total" ]]; then touch "$STATE_DIR/$cat.installed"; else rm -f "$STATE_DIR/$cat.installed"; fi
+    done < "$CONF"
+}
+
+cmd_search() {
+    local term="$1"
+    while IFS='|' read -r cat name desc pkgs type; do
+        [[ "$cat" =~ ^#.*$ || -z "$cat" ]] && continue
+        for p in $pkgs; do
+            if [[ "$p" == *"$term"* ]]; then
+                echo -e "  ${MAG}$p${RST} — found in category '${cat}' ($name)"
+            fi
+        done
+    done < "$CONF"
+}
+
+case "$1" in
+    list) cmd_list ;;
+    show) cmd_show "$2" ;;
+    tools) cmd_tools "$2" ;;
+    install) [[ -z "$2" ]] && usage; cmd_install "$2" ;;
+    remove) [[ -z "$2" ]] && usage; cmd_remove "$2" ;;
+    status) cmd_status ;;
+    check) cmd_check "$2" ;;
+    search) cmd_search "$2" ;;
+    *) usage ;;
+esac
