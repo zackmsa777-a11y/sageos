@@ -1,0 +1,135 @@
+#!/bin/bash
+# sage-security — friendly whiptail menu for browsing/installing/launching
+# SageOS cybersecurity mission packs, built on top of sage-pkg.
+
+CONF="/usr/local/share/sage-pkg/categories.conf"
+DESC_CONF="/usr/local/share/sage-pkg/tool-descriptions.conf"
+STATE_DIR="/var/lib/sage-pkg"
+BACKTITLE="SageOS — Cybersecurity Mission Control"
+
+need_root() {
+    if [[ $EUID -ne 0 ]]; then
+        whiptail --backtitle "$BACKTITLE" --msgbox "Run this as root (or with sudo) to install/remove tools." 8 60
+        return 1
+    fi
+    return 0
+}
+
+tool_desc() {
+    local t="$1"
+    local line; line=$(grep -v "^#" "$DESC_CONF" | awk -F'|' -v t="$t" '$1==t')
+    if [[ -n "$line" ]]; then echo "$line" | cut -d'|' -f2; else echo "(no description yet)"; fi
+}
+
+main_menu() {
+    while true; do
+        local items=()
+        while IFS='|' read -r cat name desc pkgs type; do
+            [[ "$cat" =~ ^#.*$ || -z "$cat" ]] && continue
+            local tag="$name"
+            [[ -f "$STATE_DIR/$cat.installed" ]] && tag="$name [installed]"
+            items+=("$cat" "$tag")
+        done < "$CONF"
+        items+=("--------" "")
+        items+=("browse" "Browse all tools & what they do")
+        items+=("check" "Check which packs are actually installed")
+        items+=("install-all" "Install EVERY mission pack")
+        items+=("remove-all" "Remove EVERY removable mission pack")
+
+        CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "Mission Packs" \
+            --menu "Choose a category to explore, or a bulk action:" 24 78 14 \
+            "${items[@]}" 3>&1 1>&2 2>&3)
+        [[ $? -ne 0 ]] && break
+
+        case "$CHOICE" in
+            "--------") ;;
+            browse) browse_tools ;;
+            check) run_check ;;
+            install-all) bulk_action install ;;
+            remove-all) bulk_action remove ;;
+            *) category_menu "$CHOICE" ;;
+        esac
+    done
+    clear
+}
+
+browse_tools() {
+    local text=""
+    while IFS='|' read -r cat name desc pkgs type; do
+        [[ "$cat" =~ ^#.*$ || -z "$cat" ]] && continue
+        text+="$name ($cat)\n"
+        for p in $pkgs; do
+            text+="  - $p: $(tool_desc "$p")\n"
+        done
+        text+="\n"
+    done < "$CONF"
+    echo -e "$text" > /tmp/sage-tools.txt
+    whiptail --backtitle "$BACKTITLE" --title "All Tools" --textbox /tmp/sage-tools.txt 26 78
+}
+
+run_check() {
+    need_root || return
+    sage-pkg check > /tmp/sage-check.log 2>&1
+    whiptail --backtitle "$BACKTITLE" --title "Mission Pack Check" --textbox /tmp/sage-check.log 20 74
+}
+
+bulk_action() {
+    local action="$1"
+    need_root || return
+    if [[ "$action" == "remove" ]]; then
+        whiptail --backtitle "$BACKTITLE" --yesno "This will remove every removable mission pack (apt + downloaded tools). Continue?" 10 65
+        [[ $? -ne 0 ]] && return
+    fi
+    whiptail --backtitle "$BACKTITLE" --infobox "Running 'sage-pkg $action all'...\nThis can take a few minutes." 8 60
+    sage-pkg "$action" all > "/tmp/sage-$action-all.log" 2>&1
+    whiptail --backtitle "$BACKTITLE" --title "Result" --textbox "/tmp/sage-$action-all.log" 24 78
+}
+
+category_menu() {
+    local cat="$1"
+    local row name desc pkgs type
+    row=$(grep -v "^#" "$CONF" | awk -F'|' -v c="$cat" '$1==c')
+    name=$(echo "$row" | cut -d'|' -f2)
+    desc=$(echo "$row" | cut -d'|' -f3)
+    pkgs=$(echo "$row" | cut -d'|' -f4)
+    type=$(echo "$row" | cut -d'|' -f5)
+    local installed="not installed"
+    [[ -f "$STATE_DIR/$cat.installed" ]] && installed="installed"
+
+    local tool_list=""
+    for p in $pkgs; do tool_list+="  - $p: $(tool_desc "$p")\n"; done
+
+    local extra_note=""
+    [[ "$type" == "builtin" ]] && extra_note="\n(pre-installed, can't be removed)"
+    [[ "$type" == "fetch" ]] && extra_note="\n(downloaded from upstream on install)"
+
+    ACTION=$(whiptail --backtitle "$BACKTITLE" --title "$name ($installed)" \
+        --menu "$desc$extra_note\n\nTools:\n$tool_list" 24 78 3 \
+        "install" "Install all tools in this pack" \
+        "remove"  "Remove all tools in this pack" \
+        "back"    "Return to category list" \
+        3>&1 1>&2 2>&3)
+    [[ $? -ne 0 ]] && return
+
+    case "$ACTION" in
+        install)
+            need_root || return
+            whiptail --backtitle "$BACKTITLE" --infobox "Installing '$name'...\nThis may take a minute." 8 60
+            sage-pkg install "$cat" > /tmp/sage-install.log 2>&1
+            if [[ $? -eq 0 ]]; then
+                whiptail --backtitle "$BACKTITLE" --msgbox "Done — '$name' tools are ready." 8 60
+            else
+                whiptail --backtitle "$BACKTITLE" --textbox /tmp/sage-install.log 20 70
+            fi
+            ;;
+        remove)
+            need_root || return
+            whiptail --backtitle "$BACKTITLE" --infobox "Removing '$name'..." 8 60
+            sage-pkg remove "$cat" > /tmp/sage-remove.log 2>&1
+            whiptail --backtitle "$BACKTITLE" --textbox /tmp/sage-remove.log 20 70
+            ;;
+        back) return ;;
+    esac
+}
+
+main_menu
