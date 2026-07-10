@@ -1,0 +1,67 @@
+#!/bin/bash
+# sage-persistence-setup — turn a spare disk/partition/USB stick into a
+# SageOS persistence volume so installed packs, home dir changes, and
+# config edits survive a reboot (instead of vanishing with the tmpfs
+# overlay used by default).
+#
+# Safe to run from a live, non-persistent SageOS session.
+
+set -u
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Run this as root (sudo sage-persistence-setup)."
+  exit 1
+fi
+
+echo "=== SageOS Persistence Setup ==="
+echo
+echo "This finds/prepares a SEPARATE disk (a second virtual disk in your"
+echo "VM, or a real USB stick) to hold persistent data. It will be WIPED."
+echo "Do NOT point this at the disk/CD you booted SageOS from."
+echo
+
+# Figure out what's currently mounted as / so we can warn (best-effort;
+# does not fully protect against user error, hence the confirmation below).
+ROOT_SRC=$(awk '$2=="/"{print $1}' /proc/mounts | head -1)
+echo "Currently booted from filesystem source: ${ROOT_SRC:-unknown}"
+echo
+
+echo "Available block devices:"
+lsblk -d -o NAME,SIZE,TYPE,MODEL 2>/dev/null || ls /dev/sd* /dev/vd* 2>/dev/null
+echo
+
+read -rp "Enter the device to use for persistence (e.g. sdb, vdb — no /dev/ prefix): " DEV
+DEV="/dev/${DEV#/dev/}"
+
+if [ ! -b "$DEV" ]; then
+  echo "ERROR: $DEV is not a block device."
+  exit 1
+fi
+
+echo
+echo "!!! WARNING: Everything on $DEV will be ERASED !!!"
+read -rp "Type YES (all caps) to continue: " CONFIRM
+if [ "$CONFIRM" != "YES" ]; then
+  echo "Aborted, nothing changed."
+  exit 1
+fi
+
+echo "[+] Formatting $DEV as ext4 (label: SAGEOS-PERSIST)..."
+mke2fs -F -t ext4 -L SAGEOS-PERSIST "$DEV"
+
+MNT=$(mktemp -d)
+echo "[+] Mounting $DEV to set up persistence layout..."
+mount "$DEV" "$MNT" || { echo "ERROR: mount failed"; exit 1; }
+
+touch "$MNT/.sageos-persistence"
+mkdir -p "$MNT/upper" "$MNT/work"
+
+umount "$MNT"
+rmdir "$MNT"
+
+echo
+echo "=== Done ==="
+echo "$DEV is now a SageOS persistence volume."
+echo "Keep it attached (as a second VM disk, or plugged-in USB) on your"
+echo "next boot — SageOS auto-detects it at startup and any changes you"
+echo "make (installed packs, home dir, configs) will survive reboots."
