@@ -3,7 +3,9 @@
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
-# Mount essential filesystems
+# Mount essential filesystems (mountpoint dirs must exist first —
+# the initramfs cpio image doesn't ship them, unlike a real rootfs)
+/bin/busybox mkdir -p /proc /sys /dev /mnt /tmp /run
 /bin/busybox mount -t proc none /proc
 /bin/busybox mount -t sysfs none /sys
 /bin/busybox mount -t devtmpfs none /dev 2>/dev/null || /bin/busybox mdev -s
@@ -122,6 +124,35 @@ if [ -z "$SQUASHFS" ]; then
   exec /bin/busybox sh
 fi
 
+# Copy squashfs into RAM before mounting.
+# Reading a compressed squashfs live off a virtual optical drive works,
+# but on VirtualBox's ATAPI/IDE CD-ROM emulation every random-access read
+# for decompression is slow (unlike QEMU virtio or real hardware), so the
+# *entire session* (not just boot) drags. Copying once into tmpfs turns
+# every read after this point into a RAM read, at the cost of one linear
+# copy up front (much faster than the repeated slow reads it replaces).
+SQUASHFS_SIZE=$(/bin/busybox stat -c %s "$SQUASHFS" 2>/dev/null || echo 0)
+SQUASHFS_KB=$((SQUASHFS_SIZE / 1024))
+MEMTOTAL_KB=$(/bin/busybox awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null || echo 0)
+# Only copy to RAM if we have at least 2x the squashfs size free (squashfs + headroom for the running OS)
+# NOTE: stay in KB throughout — busybox ash arithmetic overflows 32-bit signed
+# range if we convert to bytes on a system with >2GB RAM (2GB in bytes alone
+# exceeds INT32_MAX), which silently breaks the comparison.
+if [ "$SQUASHFS_KB" -gt 0 ] && [ "$MEMTOTAL_KB" -gt $((SQUASHFS_KB * 2)) ]; then
+  echo "[live] Copying squashfs to RAM ($((SQUASHFS_KB / 1024))MB, this can take a bit on slow virtual CD-ROMs)..."
+  mkdir -p /mnt/ramsquash
+  /bin/busybox mount -t tmpfs -o size=$((SQUASHFS_KB / 1024 + 32))m none /mnt/ramsquash
+  if /bin/busybox cp "$SQUASHFS" /mnt/ramsquash/rootfs.squashfs; then
+    echo "[live] Copy to RAM complete"
+    SQUASHFS="/mnt/ramsquash/rootfs.squashfs"
+  else
+    echo "[live] RAM copy failed, falling back to direct read from media"
+    /bin/busybox umount /mnt/ramsquash 2>/dev/null
+  fi
+else
+  echo "[live] Not enough RAM headroom to copy squashfs, reading directly from media (will be slower on VirtualBox)"
+fi
+
 # Set up loop device for the squashfs file
 LOOPDEV=$(/bin/busybox losetup -f 2>/dev/null)
 if [ -n "$LOOPDEV" ]; then
@@ -133,6 +164,7 @@ else
 fi
 
 # Mount the squashfs
+echo "[live] Mounting squashfs rootfs..."
 mkdir -p /mnt/ro
 if ! /bin/busybox mount -t squashfs -o ro "$LOOPDEV" /mnt/ro; then
   echo "[live] ERROR: squashfs mount failed! Trying direct mount..."
