@@ -1,0 +1,29 @@
+# SageOS system profile
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export TERM=${TERM:-linux}
+export HOME=${HOME:-/root}
+export LANG=C.UTF-8
+
+# Fancy colored prompt
+if [ "$EUID" = "0" ]; then
+    export PS1='\[\033[1;31m\]root\[\033[0m\]@\[\033[1;36m\]sageos\[\033[0m\]:\[\033[1;34m\]\w\[\033[0m\]# '
+else
+    export PS1='\[\033[1;32m\]\u\[\033[0m\]@\[\033[1;36m\]sageos\[\033[0m\]:\[\033[1;34m\]\w\[\033[0m\]$ '
+fi
+
+# Aliases
+alias ll='ls -la --color=auto'
+alias la='ls -A --color=auto'
+alias l='ls -CF --color=auto'
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
+alias ..='cd ..'
+alias ...='cd ../..'
+alias df='df -h'
+alias free='free -h'
+alias ports='netstat -tulanp'
+alias ff='fastfetch'
+
+# SageOS version
+export SAGEOS_VERSION="5.1-beta2"
+export PATH=$PATH:/usr/local/go/bin
