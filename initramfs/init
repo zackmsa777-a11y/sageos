@@ -77,10 +77,15 @@ load_mod drm_kms_helper.ko
 load_mod ttm.ko
 load_mod drm_ttm_helper.ko
 
-# Filesystems
+# Filesystems (ext4 needed to read a persistence volume, if present)
 load_mod isofs.ko
 load_mod squashfs.ko
 load_mod overlay.ko
+load_mod crc16.ko
+load_mod crc32c_generic.ko
+load_mod mbcache.ko
+load_mod jbd2.ko
+load_mod ext4.ko
 
 # Give devices time to settle
 sleep 2
@@ -90,6 +95,7 @@ echo "[live] Block devices: $(ls /dev/sr* /dev/sd* /dev/vd* /dev/loop* 2>/dev/nu
 
 # Find the boot media
 SQUASHFS=""
+LIVE_DEV=""
 MOUNT_POINT="/mnt/media"
 mkdir -p "$MOUNT_POINT"
 
@@ -102,6 +108,7 @@ for dev in $(ls /dev/sr* /dev/sd* /dev/vd* 2>/dev/null); do
 
   if [ -f "$MOUNT_POINT/live/rootfs.squashfs" ]; then
     SQUASHFS="$MOUNT_POINT/live/rootfs.squashfs"
+    LIVE_DEV="$dev"
     echo "[live] Found rootfs.squashfs on $dev"
     break
   else
@@ -135,14 +142,46 @@ if ! /bin/busybox mount -t squashfs -o ro "$LOOPDEV" /mnt/ro; then
 fi
 echo "[live] Mounted squashfs rootfs"
 
-# Create tmpfs for writable overlay
+# --- Persistence detection ---
+# Look for a separate ext4 volume (a second disk/partition, not the
+# device we booted from) carrying a marker file. Created by running
+# `sage-persistence-setup` from inside an already-booted SageOS session.
+# If found, real writes (installed packs, home dir, config changes) land
+# there and survive reboot. If not found, we fall back to tmpfs like
+# before (works during the session, wiped on reboot).
+PERSIST_DEV=""
+mkdir -p /mnt/persist
+for dev in $(ls /dev/sd* /dev/vd* /dev/nvme*n*p* 2>/dev/null); do
+  [ -b "$dev" ] || continue
+  [ "$dev" = "$LIVE_DEV" ] && continue
+  if /bin/busybox mount -t ext4 -o rw "$dev" /mnt/persist 2>/dev/null; then
+    if [ -f /mnt/persist/.sageos-persistence ]; then
+      PERSIST_DEV="$dev"
+      echo "[live] Persistence volume found: $dev"
+      break
+    fi
+    /bin/busybox umount /mnt/persist 2>/dev/null
+  fi
+done
+
 mkdir -p /mnt/rw
-/bin/busybox mount -t tmpfs none /mnt/rw
+if [ -n "$PERSIST_DEV" ]; then
+  mkdir -p /mnt/persist/upper /mnt/persist/work
+  UPPERDIR=/mnt/persist/upper
+  WORKDIR=/mnt/persist/work
+  echo "[live] Persistence ENABLED (writes will survive reboot: $PERSIST_DEV)"
+else
+  /bin/busybox mount -t tmpfs none /mnt/rw
+  mkdir -p /mnt/rw/upper /mnt/rw/work
+  UPPERDIR=/mnt/rw/upper
+  WORKDIR=/mnt/rw/work
+  echo "[live] No persistence volume — using tmpfs (writes lost on reboot)"
+fi
 
 # Set up overlayfs
-mkdir -p /mnt/rw/upper /mnt/rw/work /mnt/overlay
+mkdir -p /mnt/overlay
 if /bin/busybox mount -t overlay overlay \
-  -o "lowerdir=/mnt/ro,upperdir=/mnt/rw/upper,workdir=/mnt/rw/work" \
+  -o "lowerdir=/mnt/ro,upperdir=$UPPERDIR,workdir=$WORKDIR" \
   /mnt/overlay; then
   echo "[live] Overlay filesystem ready"
 else
