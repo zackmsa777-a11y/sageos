@@ -40,7 +40,12 @@ All packages are pulled directly from the official Debian bookworm repositories 
 
 ### Download
 
-Grab the latest ISO from [Releases](../../releases/latest).
+- **Direct download:** [Releases](../../releases/latest)
+- **Torrent:** [sageos-5.0.iso.torrent](https://github.com/zackmsa777-a11y/sageos/releases/download/v5.0/sageos-5.0.iso.torrent) (includes a GitHub webseed, so it downloads even with zero peers)
+- **Magnet link:**
+  ```
+  magnet:?xt=urn:btih:2f327a5f55168380304b61090b30bb50c2c7cf69&dn=sageos-5.0.iso&tr=udp%3A//tracker.opentrackr.org%3A1337/announce&tr=udp%3A//tracker.openbittorrent.com%3A6969/announce&tr=udp%3A//open.stealth.si%3A80/announce
+  ```
 
 ### Boot it
 
