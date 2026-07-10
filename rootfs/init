@@ -1,64 +1,219 @@
-#!/bin/bash
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+#!/bin/busybox sh
+# SageOS v5.1 — Live boot init
 
-# /proc, /sys, /dev were already mounted (and /dev populated with real
-# device nodes) by the initramfs, then moved into this root via
-# `mount --move`. Do NOT remount them here — a fresh devtmpfs/tmpfs on
-# top would shadow the already-populated /dev (losing /dev/console etc).
-mountpoint -q /proc || mount -t proc none /proc 2>/dev/null
-mountpoint -q /sys || mount -t sysfs none /sys 2>/dev/null
-mountpoint -q /dev || mount -t devtmpfs none /dev 2>/dev/null || mount -t tmpfs none /dev
-mkdir -p /dev/pts
-mountpoint -q /dev/pts || mount -t devpts none /dev/pts 2>/dev/null
-mount -t tmpfs none /tmp 2>/dev/null
-mount -t tmpfs none /run 2>/dev/null
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
-# Set hostname
-hostname sageos
-echo "sageos" > /etc/hostname
+# Mount essential filesystems
+/bin/busybox mount -t proc none /proc
+/bin/busybox mount -t sysfs none /sys
+/bin/busybox mount -t devtmpfs none /dev 2>/dev/null || /bin/busybox mdev -s
 
-# Load profile
-. /etc/profile
+echo "[live] SageOS v5.1 live-boot starting..."
 
-# Setup networking
-IFACE=$(ls /sys/class/net 2>/dev/null | grep -v lo | head -1)
-if [ -n "$IFACE" ]; then
-    ip link set "$IFACE" up 2>/dev/null
-    # Try DHCP (short timeout — don't stall boot waiting on a lease)
-    udhcpc -i "$IFACE" -q -t 2 -T 1 -A 1 -n 2>/dev/null && \
-        echo "[network] $IFACE: $(ip addr show $IFACE | grep 'inet ' | awk '{print $2}')" || \
-        echo "[network] No DHCP lease (offline mode)"
-fi
+# Load kernel modules (in dependency order)
+MODDIR="/lib/modules/$(ls /lib/modules)"
+echo "[live] Loading kernel modules..."
 
-# Start essential services
-syslogd 2>/dev/null
+load_mod() {
+  if [ -f "$MODDIR/$1" ]; then
+    /bin/busybox insmod "$MODDIR/$1" 2>/dev/null && echo "[live]   loaded: $1" || true
+  fi
+}
 
-# Welcome banner
-echo ""
-echo "  ╔══════════════════════════════════════════╗"
-echo "  ║          SageOS v5.1 — Real Edition       ║"
-echo "  ║     Debian-powered • Linux 6.1 • x86_64   ║"
-echo "  ╚══════════════════════════════════════════╝"
-echo ""
-echo "  User: root    Home: /root    Shell: bash"
-echo "  Date: $(date)"
-echo ""
+# CRC deps (needed by t10-pi)
+load_mod crct10dif_common.ko
+load_mod crc-t10dif.ko
+load_mod crc64.ko
+load_mod crc64-rocksoft.ko
 
-# Run fastfetch for system info
-if command -v fastfetch &>/dev/null; then
-    fastfetch
-fi
+# Core SCSI
+load_mod scsi_common.ko
+load_mod scsi_mod.ko
+load_mod t10-pi.ko
 
-echo ""
-echo "  Try: fastfetch • htop • vim • git • curl • tree"
-echo "  Type 'help' for bash builtins, 'apt list' for packages"
-echo ""
+# ATA/SATA
+load_mod libata.ko
+load_mod libahci.ko
+load_mod ata_piix.ko
+load_mod ahci.ko
 
-# Drop to interactive bash shell — PID 1 must never actually exit or the
-# kernel panics ("Attempted to kill init!"). Respawn if the shell ever
-# exits (EOF on console, crash, `exit` command, etc).
-while true; do
-    /bin/bash --login < /dev/console > /dev/console 2>&1
-    echo "[init] shell exited (code $?), respawning in 2s..." > /dev/console
-    sleep 2
+# CD-ROM
+load_mod cdrom.ko
+load_mod sr_mod.ko
+
+# Disk
+load_mod sd_mod.ko
+
+# Loop device (for mounting squashfs from CD)
+load_mod loop.ko
+
+# Virtio core
+load_mod virtio.ko
+load_mod virtio_ring.ko
+load_mod virtio_pci_legacy_dev.ko
+load_mod virtio_pci_modern_dev.ko
+load_mod virtio_pci.ko
+load_mod virtio_blk.ko
+load_mod virtio_scsi.ko
+
+# Virtio net (needs failover deps first)
+load_mod failover.ko
+load_mod net_failover.ko
+load_mod virtio_net.ko
+
+load_mod virtio_console.ko
+load_mod virtio_balloon.ko
+load_mod virtio_input.ko
+load_mod virtio-rng.ko
+
+# Virtio GPU DRM stack — cec.ko and virtio-gpu.ko still fail with
+# unresolved symbols on this kernel build (missing rc-core / virtio_dma_buf
+# helpers we don't ship) and only waste boot time under slow/unaccelerated
+# emulation, so we skip loading them. Standard VGA/framebuffer display
+# still works; only 3D/DRM accel is unavailable.
+load_mod drm.ko
+load_mod drm_shmem_helper.ko
+load_mod drm_kms_helper.ko
+load_mod ttm.ko
+load_mod drm_ttm_helper.ko
+
+# Filesystems (ext4 needed to read a persistence volume, if present)
+load_mod isofs.ko
+load_mod squashfs.ko
+load_mod overlay.ko
+load_mod crc16.ko
+load_mod crc32c_generic.ko
+load_mod mbcache.ko
+load_mod jbd2.ko
+load_mod ext4.ko
+
+# Give devices time to settle
+sleep 2
+/bin/busybox mdev -s 2>/dev/null
+
+echo "[live] Block devices: $(ls /dev/sr* /dev/sd* /dev/vd* /dev/loop* 2>/dev/null)"
+
+# Find the boot media
+SQUASHFS=""
+LIVE_DEV=""
+MOUNT_POINT="/mnt/media"
+mkdir -p "$MOUNT_POINT"
+
+for dev in $(ls /dev/sr* /dev/sd* /dev/vd* 2>/dev/null); do
+  [ -b "$dev" ] || continue
+  echo "[live] Trying $dev..."
+  /bin/busybox mount -t iso9660 -o ro "$dev" "$MOUNT_POINT" 2>/dev/null || \
+  /bin/busybox mount -t vfat -o ro "$dev" "$MOUNT_POINT" 2>/dev/null || \
+  /bin/busybox mount -t ext4 -o ro "$dev" "$MOUNT_POINT" 2>/dev/null
+
+  if [ -f "$MOUNT_POINT/live/rootfs.squashfs" ]; then
+    SQUASHFS="$MOUNT_POINT/live/rootfs.squashfs"
+    LIVE_DEV="$dev"
+    echo "[live] Found rootfs.squashfs on $dev"
+    break
+  else
+    /bin/busybox umount "$MOUNT_POINT" 2>/dev/null
+  fi
 done
+
+if [ -z "$SQUASHFS" ]; then
+  echo "[live] ERROR: Could not find rootfs.squashfs!"
+  exec /bin/busybox sh
+fi
+
+# Set up loop device for the squashfs file
+LOOPDEV=$(/bin/busybox losetup -f 2>/dev/null)
+if [ -n "$LOOPDEV" ]; then
+  /bin/busybox losetup -r "$LOOPDEV" "$SQUASHFS" 2>/dev/null
+  echo "[live] Loop device: $LOOPDEV -> $SQUASHFS"
+else
+  echo "[live] No loop device available, trying direct mount..."
+  LOOPDEV="$SQUASHFS"
+fi
+
+# Mount the squashfs
+mkdir -p /mnt/ro
+if ! /bin/busybox mount -t squashfs -o ro "$LOOPDEV" /mnt/ro; then
+  echo "[live] ERROR: squashfs mount failed! Trying direct mount..."
+  if ! /bin/busybox mount -t squashfs -o ro "$SQUASHFS" /mnt/ro; then
+    echo "[live] FATAL: Cannot mount squashfs rootfs!"
+    exec /bin/busybox sh
+  fi
+fi
+echo "[live] Mounted squashfs rootfs"
+
+# --- Persistence detection ---
+# Look for a separate ext4 volume (a second disk/partition, not the
+# device we booted from) carrying a marker file. Created by running
+# `sage-persistence-setup` from inside an already-booted SageOS session.
+# If found, real writes (installed packs, home dir, config changes) land
+# there and survive reboot. If not found, we fall back to tmpfs like
+# before (works during the session, wiped on reboot).
+PERSIST_DEV=""
+mkdir -p /mnt/persist
+for dev in $(ls /dev/sd* /dev/vd* /dev/nvme*n*p* 2>/dev/null); do
+  [ -b "$dev" ] || continue
+  [ "$dev" = "$LIVE_DEV" ] && continue
+  if /bin/busybox mount -t ext4 -o rw "$dev" /mnt/persist 2>/dev/null; then
+    if [ -f /mnt/persist/.sageos-persistence ]; then
+      PERSIST_DEV="$dev"
+      echo "[live] Persistence volume found: $dev"
+      break
+    fi
+    /bin/busybox umount /mnt/persist 2>/dev/null
+  fi
+done
+
+mkdir -p /mnt/rw
+if [ -n "$PERSIST_DEV" ]; then
+  mkdir -p /mnt/persist/upper /mnt/persist/work
+  UPPERDIR=/mnt/persist/upper
+  WORKDIR=/mnt/persist/work
+  echo "[live] Persistence ENABLED (writes will survive reboot: $PERSIST_DEV)"
+else
+  /bin/busybox mount -t tmpfs none /mnt/rw
+  mkdir -p /mnt/rw/upper /mnt/rw/work
+  UPPERDIR=/mnt/rw/upper
+  WORKDIR=/mnt/rw/work
+  echo "[live] No persistence volume — using tmpfs (writes lost on reboot)"
+fi
+
+# Set up overlayfs
+mkdir -p /mnt/overlay
+if /bin/busybox mount -t overlay overlay \
+  -o "lowerdir=/mnt/ro,upperdir=$UPPERDIR,workdir=$WORKDIR" \
+  /mnt/overlay; then
+  echo "[live] Overlay filesystem ready"
+else
+  echo "[live] Overlay failed, using squashfs directly..."
+  /bin/busybox mount --move /mnt/ro /mnt/overlay 2>/dev/null || {
+    ln -sf /mnt/ro /mnt/overlay
+  }
+fi
+
+# Verify init exists
+if [ ! -f /mnt/overlay/init ]; then
+  echo "[live] WARNING: /init not found in overlay!"
+  ls /mnt/overlay/ | head -10
+  # Try /sbin/init as fallback
+  if [ -f /mnt/overlay/sbin/init ]; then
+    echo "[live] Using /sbin/init instead"
+    INIT_TARGET="/sbin/init"
+  else
+    echo "[live] FATAL: No init found!"
+    exec /bin/busybox sh
+  fi
+else
+  INIT_TARGET="/init"
+fi
+
+# Move kernel filesystems into new root
+mkdir -p /mnt/overlay/proc /mnt/overlay/sys /mnt/overlay/dev /mnt/overlay/run
+/bin/busybox mount --move /proc /mnt/overlay/proc
+/bin/busybox mount --move /sys /mnt/overlay/sys
+/bin/busybox mount --move /dev /mnt/overlay/dev
+
+echo "[live] Switching to real root ($INIT_TARGET)..."
+
+# Switch root and exec the real init
+exec /bin/busybox switch_root /mnt/overlay "$INIT_TARGET"
