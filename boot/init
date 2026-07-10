@@ -1,0 +1,176 @@
+#!/bin/busybox sh
+# SageOS v3.0 — Live boot init
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+# Mount essential filesystems
+/bin/busybox mount -t proc none /proc
+/bin/busybox mount -t sysfs none /sys
+/bin/busybox mount -t devtmpfs none /dev 2>/dev/null || /bin/busybox mdev -s
+
+echo "[live] SageOS v3.0 live-boot starting..."
+
+# Load kernel modules (in dependency order)
+MODDIR="/lib/modules/$(ls /lib/modules)"
+echo "[live] Loading kernel modules..."
+
+load_mod() {
+  if [ -f "$MODDIR/$1" ]; then
+    /bin/busybox insmod "$MODDIR/$1" 2>/dev/null && echo "[live]   loaded: $1" || true
+  fi
+}
+
+# CRC deps (needed by t10-pi)
+load_mod crc-t10dif.ko
+load_mod crc64-rocksoft.ko
+
+# Core SCSI
+load_mod scsi_common.ko
+load_mod scsi_mod.ko
+load_mod t10-pi.ko
+
+# ATA/SATA
+load_mod libata.ko
+load_mod libahci.ko
+load_mod ata_piix.ko
+load_mod ahci.ko
+
+# CD-ROM
+load_mod cdrom.ko
+load_mod sr_mod.ko
+
+# Disk
+load_mod sd_mod.ko
+
+# Loop device (for mounting squashfs from CD)
+load_mod loop.ko
+
+# Virtio core
+load_mod virtio.ko
+load_mod virtio_ring.ko
+load_mod virtio_pci_legacy_dev.ko
+load_mod virtio_pci_modern_dev.ko
+load_mod virtio_pci.ko
+load_mod virtio_blk.ko
+load_mod virtio_scsi.ko
+
+# Virtio net (needs failover deps first)
+load_mod failover.ko
+load_mod net_failover.ko
+load_mod virtio_net.ko
+
+load_mod virtio_console.ko
+load_mod virtio_balloon.ko
+load_mod virtio_input.ko
+load_mod virtio-rng.ko
+
+# Virtio GPU (needs DRM stack first)
+load_mod drm.ko
+load_mod drm_shmem_helper.ko
+load_mod drm_kms_helper.ko
+load_mod ttm.ko
+load_mod drm_ttm_helper.ko
+load_mod cec.ko
+load_mod virtio-gpu.ko
+
+# Filesystems
+load_mod isofs.ko
+load_mod squashfs.ko
+load_mod overlay.ko
+
+# Give devices time to settle
+sleep 2
+/bin/busybox mdev -s 2>/dev/null
+
+echo "[live] Block devices: $(ls /dev/sr* /dev/sd* /dev/vd* /dev/loop* 2>/dev/null)"
+
+# Find the boot media
+SQUASHFS=""
+MOUNT_POINT="/mnt/media"
+mkdir -p "$MOUNT_POINT"
+
+for dev in $(ls /dev/sr* /dev/sd* /dev/vd* 2>/dev/null); do
+  [ -b "$dev" ] || continue
+  echo "[live] Trying $dev..."
+  /bin/busybox mount -t iso9660 -o ro "$dev" "$MOUNT_POINT" 2>/dev/null || \
+  /bin/busybox mount -t vfat -o ro "$dev" "$MOUNT_POINT" 2>/dev/null || \
+  /bin/busybox mount -t ext4 -o ro "$dev" "$MOUNT_POINT" 2>/dev/null
+
+  if [ -f "$MOUNT_POINT/live/rootfs.squashfs" ]; then
+    SQUASHFS="$MOUNT_POINT/live/rootfs.squashfs"
+    echo "[live] Found rootfs.squashfs on $dev"
+    break
+  else
+    /bin/busybox umount "$MOUNT_POINT" 2>/dev/null
+  fi
+done
+
+if [ -z "$SQUASHFS" ]; then
+  echo "[live] ERROR: Could not find rootfs.squashfs!"
+  exec /bin/busybox sh
+fi
+
+# Set up loop device for the squashfs file
+LOOPDEV=$(/bin/busybox losetup -f 2>/dev/null)
+if [ -n "$LOOPDEV" ]; then
+  /bin/busybox losetup -r "$LOOPDEV" "$SQUASHFS" 2>/dev/null
+  echo "[live] Loop device: $LOOPDEV -> $SQUASHFS"
+else
+  echo "[live] No loop device available, trying direct mount..."
+  LOOPDEV="$SQUASHFS"
+fi
+
+# Mount the squashfs
+mkdir -p /mnt/ro
+if ! /bin/busybox mount -t squashfs -o ro "$LOOPDEV" /mnt/ro; then
+  echo "[live] ERROR: squashfs mount failed! Trying direct mount..."
+  if ! /bin/busybox mount -t squashfs -o ro "$SQUASHFS" /mnt/ro; then
+    echo "[live] FATAL: Cannot mount squashfs rootfs!"
+    exec /bin/busybox sh
+  fi
+fi
+echo "[live] Mounted squashfs rootfs"
+
+# Create tmpfs for writable overlay
+mkdir -p /mnt/rw
+/bin/busybox mount -t tmpfs none /mnt/rw
+
+# Set up overlayfs
+mkdir -p /mnt/rw/upper /mnt/rw/work /mnt/overlay
+if /bin/busybox mount -t overlay overlay \
+  -o "lowerdir=/mnt/ro,upperdir=/mnt/rw/upper,workdir=/mnt/rw/work" \
+  /mnt/overlay; then
+  echo "[live] Overlay filesystem ready"
+else
+  echo "[live] Overlay failed, using squashfs directly..."
+  /bin/busybox mount --move /mnt/ro /mnt/overlay 2>/dev/null || {
+    ln -sf /mnt/ro /mnt/overlay
+  }
+fi
+
+# Verify init exists
+if [ ! -f /mnt/overlay/init ]; then
+  echo "[live] WARNING: /init not found in overlay!"
+  ls /mnt/overlay/ | head -10
+  # Try /sbin/init as fallback
+  if [ -f /mnt/overlay/sbin/init ]; then
+    echo "[live] Using /sbin/init instead"
+    INIT_TARGET="/sbin/init"
+  else
+    echo "[live] FATAL: No init found!"
+    exec /bin/busybox sh
+  fi
+else
+  INIT_TARGET="/init"
+fi
+
+# Move kernel filesystems into new root
+mkdir -p /mnt/overlay/proc /mnt/overlay/sys /mnt/overlay/dev /mnt/overlay/run
+/bin/busybox mount --move /proc /mnt/overlay/proc
+/bin/busybox mount --move /sys /mnt/overlay/sys
+/bin/busybox mount --move /dev /mnt/overlay/dev
+
+echo "[live] Switching to real root ($INIT_TARGET)..."
+
+# Switch root and exec the real init
+exec /bin/busybox switch_root /mnt/overlay "$INIT_TARGET"
