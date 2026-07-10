@@ -1,7 +1,6 @@
 #!/bin/bash
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Mount filesystems
 # /proc, /sys, /dev were already mounted (and /dev populated with real
 # device nodes) by the initramfs, then moved into this root via
 # `mount --move`. Do NOT remount them here — a fresh devtmpfs/tmpfs on
@@ -25,8 +24,8 @@ echo "sageos" > /etc/hostname
 IFACE=$(ls /sys/class/net 2>/dev/null | grep -v lo | head -1)
 if [ -n "$IFACE" ]; then
     ip link set "$IFACE" up 2>/dev/null
-    # Try DHCP
-    udhcpc -i "$IFACE" -q -t 3 2>/dev/null && \
+    # Try DHCP (short timeout — don't stall boot waiting on a lease)
+    udhcpc -i "$IFACE" -q -t 2 -T 1 -A 1 -n 2>/dev/null && \
         echo "[network] $IFACE: $(ip addr show $IFACE | grep 'inet ' | awk '{print $2}')" || \
         echo "[network] No DHCP lease (offline mode)"
 fi
@@ -37,7 +36,7 @@ syslogd 2>/dev/null
 # Welcome banner
 echo ""
 echo "  ╔══════════════════════════════════════════╗"
-echo "  ║          SageOS v3.0 — Real Edition       ║"
+echo "  ║          SageOS v5.1 — Real Edition       ║"
 echo "  ║     Debian-powered • Linux 6.1 • x86_64   ║"
 echo "  ╚══════════════════════════════════════════╝"
 echo ""
