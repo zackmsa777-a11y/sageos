@@ -1,0 +1,65 @@
+#!/bin/bash
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Mount filesystems
+# /proc, /sys, /dev were already mounted (and /dev populated with real
+# device nodes) by the initramfs, then moved into this root via
+# `mount --move`. Do NOT remount them here — a fresh devtmpfs/tmpfs on
+# top would shadow the already-populated /dev (losing /dev/console etc).
+mountpoint -q /proc || mount -t proc none /proc 2>/dev/null
+mountpoint -q /sys || mount -t sysfs none /sys 2>/dev/null
+mountpoint -q /dev || mount -t devtmpfs none /dev 2>/dev/null || mount -t tmpfs none /dev
+mkdir -p /dev/pts
+mountpoint -q /dev/pts || mount -t devpts none /dev/pts 2>/dev/null
+mount -t tmpfs none /tmp 2>/dev/null
+mount -t tmpfs none /run 2>/dev/null
+
+# Set hostname
+hostname sageos
+echo "sageos" > /etc/hostname
+
+# Load profile
+. /etc/profile
+
+# Setup networking
+IFACE=$(ls /sys/class/net 2>/dev/null | grep -v lo | head -1)
+if [ -n "$IFACE" ]; then
+    ip link set "$IFACE" up 2>/dev/null
+    # Try DHCP
+    udhcpc -i "$IFACE" -q -t 3 2>/dev/null && \
+        echo "[network] $IFACE: $(ip addr show $IFACE | grep 'inet ' | awk '{print $2}')" || \
+        echo "[network] No DHCP lease (offline mode)"
+fi
+
+# Start essential services
+syslogd 2>/dev/null
+
+# Welcome banner
+echo ""
+echo "  ╔══════════════════════════════════════════╗"
+echo "  ║          SageOS v3.0 — Real Edition       ║"
+echo "  ║     Debian-powered • Linux 6.1 • x86_64   ║"
+echo "  ╚══════════════════════════════════════════╝"
+echo ""
+echo "  User: root    Home: /root    Shell: bash"
+echo "  Date: $(date)"
+echo ""
+
+# Run fastfetch for system info
+if command -v fastfetch &>/dev/null; then
+    fastfetch
+fi
+
+echo ""
+echo "  Try: fastfetch • htop • vim • git • curl • tree"
+echo "  Type 'help' for bash builtins, 'apt list' for packages"
+echo ""
+
+# Drop to interactive bash shell — PID 1 must never actually exit or the
+# kernel panics ("Attempted to kill init!"). Respawn if the shell ever
+# exits (EOF on console, crash, `exit` command, etc).
+while true; do
+    /bin/bash --login < /dev/console > /dev/console 2>&1
+    echo "[init] shell exited (code $?), respawning in 2s..." > /dev/console
+    sleep 2
+done
