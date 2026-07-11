@@ -3,7 +3,9 @@
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
-# Mount essential filesystems
+# Mount essential filesystems (mountpoint dirs must exist first —
+# the initramfs cpio image doesn't ship them, unlike a real rootfs)
+/bin/busybox mkdir -p /proc /sys /dev /mnt /tmp /run
 /bin/busybox mount -t proc none /proc
 /bin/busybox mount -t sysfs none /sys
 /bin/busybox mount -t devtmpfs none /dev 2>/dev/null || /bin/busybox mdev -s
@@ -61,6 +63,12 @@ load_mod failover.ko
 load_mod net_failover.ko
 load_mod virtio_net.ko
 
+# Other common emulated NICs (VirtualBox default = e1000/PCnet)
+load_mod mii.ko
+load_mod e1000.ko
+load_mod e1000e.ko
+load_mod pcnet32.ko
+
 load_mod virtio_console.ko
 load_mod virtio_balloon.ko
 load_mod virtio_input.ko
@@ -101,10 +109,11 @@ mkdir -p "$MOUNT_POINT"
 
 for dev in $(ls /dev/sr* /dev/sd* /dev/vd* 2>/dev/null); do
   [ -b "$dev" ] || continue
-  echo "[live] Trying $dev..."
-  /bin/busybox mount -t iso9660 -o ro "$dev" "$MOUNT_POINT" 2>/dev/null || \
-  /bin/busybox mount -t vfat -o ro "$dev" "$MOUNT_POINT" 2>/dev/null || \
-  /bin/busybox mount -t ext4 -o ro "$dev" "$MOUNT_POINT" 2>/dev/null
+  echo "[live] Probing $dev (max 5s each)..."
+  /bin/busybox timeout 5 /bin/busybox mount -t iso9660 -o ro "$dev" "$MOUNT_POINT" 2>/dev/null || \
+  /bin/busybox timeout 5 /bin/busybox mount -t vfat -o ro "$dev" "$MOUNT_POINT" 2>/dev/null || \
+  /bin/busybox timeout 5 /bin/busybox mount -t ext4 -o ro "$dev" "$MOUNT_POINT" 2>/dev/null
+  echo "[live] Done probing $dev"
 
   if [ -f "$MOUNT_POINT/live/rootfs.squashfs" ]; then
     SQUASHFS="$MOUNT_POINT/live/rootfs.squashfs"
@@ -121,6 +130,35 @@ if [ -z "$SQUASHFS" ]; then
   exec /bin/busybox sh
 fi
 
+# Copy squashfs into RAM before mounting.
+# Reading a compressed squashfs live off a virtual optical drive works,
+# but on VirtualBox's ATAPI/IDE CD-ROM emulation every random-access read
+# for decompression is slow (unlike QEMU virtio or real hardware), so the
+# *entire session* (not just boot) drags. Copying once into tmpfs turns
+# every read after this point into a RAM read, at the cost of one linear
+# copy up front (much faster than the repeated slow reads it replaces).
+SQUASHFS_SIZE=$(/bin/busybox stat -c %s "$SQUASHFS" 2>/dev/null || echo 0)
+SQUASHFS_KB=$((SQUASHFS_SIZE / 1024))
+MEMTOTAL_KB=$(/bin/busybox awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null || echo 0)
+# Only copy to RAM if we have at least 2x the squashfs size free (squashfs + headroom for the running OS)
+# NOTE: stay in KB throughout — busybox ash arithmetic overflows 32-bit signed
+# range if we convert to bytes on a system with >2GB RAM (2GB in bytes alone
+# exceeds INT32_MAX), which silently breaks the comparison.
+if [ "$SQUASHFS_KB" -gt 0 ] && [ "$MEMTOTAL_KB" -gt $((SQUASHFS_KB * 2)) ]; then
+  echo "[live] Copying squashfs to RAM ($((SQUASHFS_KB / 1024))MB, this can take a bit on slow virtual CD-ROMs)..."
+  mkdir -p /mnt/ramsquash
+  /bin/busybox mount -t tmpfs -o size=$((SQUASHFS_KB / 1024 + 32))m none /mnt/ramsquash
+  if /bin/busybox cp "$SQUASHFS" /mnt/ramsquash/rootfs.squashfs; then
+    echo "[live] Copy to RAM complete"
+    SQUASHFS="/mnt/ramsquash/rootfs.squashfs"
+  else
+    echo "[live] RAM copy failed, falling back to direct read from media"
+    /bin/busybox umount /mnt/ramsquash 2>/dev/null
+  fi
+else
+  echo "[live] Not enough RAM headroom to copy squashfs, reading directly from media (will be slower on VirtualBox)"
+fi
+
 # Set up loop device for the squashfs file
 LOOPDEV=$(/bin/busybox losetup -f 2>/dev/null)
 if [ -n "$LOOPDEV" ]; then
@@ -132,6 +170,7 @@ else
 fi
 
 # Mount the squashfs
+echo "[live] Mounting squashfs rootfs..."
 mkdir -p /mnt/ro
 if ! /bin/busybox mount -t squashfs -o ro "$LOOPDEV" /mnt/ro; then
   echo "[live] ERROR: squashfs mount failed! Trying direct mount..."
@@ -151,10 +190,12 @@ echo "[live] Mounted squashfs rootfs"
 # before (works during the session, wiped on reboot).
 PERSIST_DEV=""
 mkdir -p /mnt/persist
+echo "[live] Scanning for persistence volume (max 5s per device)..."
 for dev in $(ls /dev/sd* /dev/vd* /dev/nvme*n*p* 2>/dev/null); do
   [ -b "$dev" ] || continue
   [ "$dev" = "$LIVE_DEV" ] && continue
-  if /bin/busybox mount -t ext4 -o rw "$dev" /mnt/persist 2>/dev/null; then
+  echo "[live] Checking $dev for persistence marker..."
+  if /bin/busybox timeout 5 /bin/busybox mount -t ext4 -o rw "$dev" /mnt/persist 2>/dev/null; then
     if [ -f /mnt/persist/.sageos-persistence ]; then
       PERSIST_DEV="$dev"
       echo "[live] Persistence volume found: $dev"
