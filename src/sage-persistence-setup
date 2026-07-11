@@ -47,7 +47,7 @@ if [ "$CONFIRM" != "YES" ]; then
 fi
 
 echo "[+] Formatting $DEV as ext4 (label: SAGEOS-PERSIST)..."
-mke2fs -F -t ext4 -L SAGEOS-PERSIST "$DEV"
+mke2fs -F -F -t ext4 -L SAGEOS-PERSIST "$DEV"
 
 MNT=$(mktemp -d)
 echo "[+] Mounting $DEV to set up persistence layout..."
