@@ -1,7 +1,7 @@
-PRETTY_NAME="SageOS 5.1 (beta10)"
+PRETTY_NAME="SageOS 5.1"
 NAME="SageOS"
 VERSION_ID="5.1"
-VERSION="5.1-beta10"
+VERSION="5.1"
 VERSION_CODENAME=bookworm
 ID=sageos
 ID_LIKE=debian
