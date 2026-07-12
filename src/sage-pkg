@@ -265,7 +265,17 @@ cmd_install_one() {
     done
     if [[ "$fail" == "0" ]]; then
         touch "$STATE_DIR/$cat.installed"
-        echo -e "${GRN}Done.${RST} '$name' tools are ready to use."
+        if [[ "$cat" == "xfce" ]]; then
+            # xfce/lightdm pull in systemd-sysv as a dependency, which
+            # silently overwrites /sbin/init with a symlink to systemd.
+            # SageOS boots via OpenRC — restore the correct init target.
+            ln -sf openrc-init /sbin/init
+            rc-update add sage-gpu-modules default >/dev/null 2>&1
+            rc-update add lightdm default >/dev/null 2>&1
+            echo -e "${GRN}Done.${RST} '$name' installed. ${CYAN}Reboot to reach the graphical login screen.${RST}"
+        else
+            echo -e "${GRN}Done.${RST} '$name' tools are ready to use."
+        fi
     else
         echo -e "${YEL}Some tools failed to install — check your network/output above and try again.${RST}"
         return 1
@@ -284,6 +294,10 @@ cmd_remove_one() {
     echo -e "${BOLD}Removing mission pack:${RST} $name"
     for p in $pkgs; do remove_token "$p" "$type"; done
     rm -f "$STATE_DIR/$cat.installed"
+    if [[ "$cat" == "xfce" ]]; then
+        rc-update del lightdm default >/dev/null 2>&1
+        rc-update del sage-gpu-modules default >/dev/null 2>&1
+    fi
     echo -e "${GRN}Done.${RST}"
 }
 
