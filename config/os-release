@@ -1,0 +1,10 @@
+PRETTY_NAME="SageOS 5.2"
+NAME="SageOS"
+VERSION_ID="5.2"
+VERSION="5.2"
+VERSION_CODENAME=bookworm
+ID=sageos
+ID_LIKE=debian
+HOME_URL="https://github.com/zackmsa777-a11y/sageos"
+SUPPORT_URL="https://github.com/zackmsa777-a11y/sageos"
+BUG_REPORT_URL="https://github.com/zackmsa777-a11y/sageos/issues"
