@@ -63,6 +63,12 @@ load_mod failover.ko
 load_mod net_failover.ko
 load_mod virtio_net.ko
 
+# Other common emulated NICs (VirtualBox default = e1000/PCnet)
+load_mod mii.ko
+load_mod e1000.ko
+load_mod e1000e.ko
+load_mod pcnet32.ko
+
 load_mod virtio_console.ko
 load_mod virtio_balloon.ko
 load_mod virtio_input.ko
@@ -92,6 +98,8 @@ load_mod ext4.ko
 # Give devices time to settle
 sleep 2
 /bin/busybox mdev -s 2>/dev/null
+/bin/busybox chmod 666 /dev/null /dev/zero /dev/full /dev/random /dev/urandom /dev/tty 2>/dev/null
+/bin/busybox chmod 620 /dev/console 2>/dev/null
 
 echo "[live] Block devices: $(ls /dev/sr* /dev/sd* /dev/vd* /dev/loop* 2>/dev/null)"
 
@@ -226,20 +234,19 @@ else
   }
 fi
 
-# Verify init exists
-if [ ! -f /mnt/overlay/init ]; then
-  echo "[live] WARNING: /init not found in overlay!"
-  ls /mnt/overlay/ | head -10
-  # Try /sbin/init as fallback
-  if [ -f /mnt/overlay/sbin/init ]; then
-    echo "[live] Using /sbin/init instead"
-    INIT_TARGET="/sbin/init"
-  else
-    echo "[live] FATAL: No init found!"
-    exec /bin/busybox sh
-  fi
-else
+# Verify init exists. Prefer /sbin/init (the real distro init, e.g. OpenRC)
+# over /init (a legacy custom bootstrap script), falling back to /init only
+# if no /sbin/init is present.
+if [ -f /mnt/overlay/sbin/init ]; then
+  echo "[live] Using /sbin/init (real init system)"
+  INIT_TARGET="/sbin/init"
+elif [ -f /mnt/overlay/init ]; then
+  echo "[live] /sbin/init not found, falling back to /init"
   INIT_TARGET="/init"
+else
+  echo "[live] FATAL: No init found!"
+  ls /mnt/overlay/ | head -10
+  exec /bin/busybox sh
 fi
 
 # Move kernel filesystems into new root
