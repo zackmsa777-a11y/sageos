@@ -1,0 +1,28 @@
+#!/sbin/openrc-run
+description="Start a getty on a serial/console line"
+port="${RC_SVCNAME#*.}"
+baud="${baud:-115200}"
+term_type="${term_type:-vt100}"
+
+depend() {
+    after local
+    provide getty
+}
+
+start() {
+    if [ "$port" = "$RC_SVCNAME" ]; then
+        eerror "${RC_SVCNAME} cannot be started directly. Create a symlink"
+        eerror "like sage-getty.ttyS0 in the runlevel instead."
+        return 1
+    fi
+    ebegin "Starting getty on ${port}"
+    /sbin/agetty "${port}" "${baud}" "${term_type}" > /dev/null 2>&1 &
+    echo $! > "/run/sage-getty.${port}.pid"
+    eend 0
+}
+
+stop() {
+    ebegin "Stopping getty on ${port}"
+    [ -f "/run/sage-getty.${port}.pid" ] && kill "$(cat /run/sage-getty.${port}.pid)" 2>/dev/null
+    eend 0
+}
