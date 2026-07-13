@@ -3,6 +3,16 @@
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
+# Safety net: PID 1 must NEVER actually exit or the kernel panics with
+# "Attempted to kill init!". If anything in this script below causes the
+# interpreter itself to terminate unexpectedly (a crash, an unhandled
+# signal, a stray exit, hardware-specific busybox misbehavior, etc.),
+# fall back to an interactive shell instead of taking the whole machine
+# down. This does NOT protect against a crash of the real init *after*
+# switch_root (that process fully replaces us), but it covers every
+# failure mode while we are still in the initramfs stage.
+trap 'echo "[live] init exited unexpectedly (code $?) - respawning emergency shell"; exec /bin/busybox sh' EXIT
+
 # Mount essential filesystems (mountpoint dirs must exist first —
 # the initramfs cpio image doesn't ship them, unlike a real rootfs)
 /bin/busybox mkdir -p /proc /sys /dev /mnt /tmp /run
