@@ -84,6 +84,15 @@ load_mod virtio_balloon.ko
 load_mod virtio_input.ko
 load_mod virtio-rng.ko
 
+# PS/2 keyboard/mouse core + generic event interface. Without evdev.ko,
+# NO input device (PS/2, virtio-input, or USB) can expose a /dev/input/eventX
+# node, which breaks all keyboard/mouse input under X11/libinput on every
+# hypervisor (QEMU, VirtualBox) and real hardware alike. serio_raw/psmouse
+# add PS/2 mouse support (atkbd/i8042 for keyboard are kernel built-ins).
+load_mod serio_raw.ko
+load_mod psmouse.ko
+load_mod evdev.ko
+
 # Virtio GPU DRM stack — cec.ko and virtio-gpu.ko still fail with
 # unresolved symbols on this kernel build (missing rc-core / virtio_dma_buf
 # helpers we don't ship) and only waste boot time under slow/unaccelerated
