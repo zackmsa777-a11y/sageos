@@ -2,26 +2,29 @@
 
 **A lightweight, security-focused Linux distribution with modular "mission pack" tooling.**
 
-SageOS is a Debian bookworm-based live distro built for penetration testing and security work — without the bloat. Instead of shipping thousands of tools you'll never touch, SageOS ships a minimal, fast base system and lets you install curated tool categories ("mission packs") on demand with `sage-pkg`, or through the friendly `sage-security` menu.
+SageOS is a Debian bookworm-based live distro built for penetration testing and security work — without the bloat. Instead of shipping thousands of tools you'll never touch, SageOS ships a minimal, fast base system (OpenRC init, no systemd) and lets you install curated tool categories ("mission packs") on demand with `sage-pkg`, or through the friendly `sage-security` menu.
 
-![sage-pkg check](docs/screenshots/sage-pkg-check.png)
+![SageOS fastfetch splash](screenshots/fastfetch-v5.3-new-logo.png)
 
 ---
 
 ## Features
 
 - **Live-boot ISO** — boots on real BIOS (ISOLINUX) and real UEFI (GRUB) hardware/VMs, no kernel-bypass tricks
-- **Mission packs** — install only the tool categories you need, straight from Debian's official repos
-- **`sage-pkg`** — a simple CLI wrapper around `apt` for managing mission packs
+- **OpenRC init** — dependency-based service management, no systemd overhead
+- **Mission packs** — install only the tool categories you need, straight from Debian's official repos (plus curated GitHub/pip tools where Debian doesn't have them)
+- **`sage-pkg`** — a simple CLI wrapper that installs mission packs from apt, GitHub releases, or pip as needed
 - **`sage-security`** — a whiptail-based menu for browsing and installing packs visually, no CLI required
-- **Custom branding** — SageOS splash on boot via `fastfetch`
+- **Optional desktop** — `sage-pkg install xfce` adds a full XFCE + lightdm graphical desktop on top of the lean base, or grab the XFCE-preinstalled ISO edition
+- **Persistence** — `sage-persistence-setup` configures an overlayfs persistent volume on a second disk/USB partition
+- **Custom branding** — SageOS splash on login via `fastfetch`
 - **Small footprint** — curated tools only; extend via `sage-pkg`, not a kitchen-sink image
 
 ## Screenshots
 
-| Boot splash | Mission pack status | Security menu |
-|---|---|---|
-| ![Fastfetch splash](docs/screenshots/fastfetch-splash.png) | ![sage-pkg check](docs/screenshots/sage-pkg-check.png) | ![sage-security menu](docs/screenshots/sage-security-menu.png) |
+| Boot splash (new logo) | Mission pack status | Security menu | XFCE desktop mission pack |
+|---|---|---|---|
+| ![Fastfetch splash](screenshots/fastfetch-v5.3-new-logo.png) | ![sage-pkg status](screenshots/sage-pkg-status-live-preview.png) | ![sage-security menu](screenshots/sage-security-menu-live-preview.png) | ![XFCE lightdm login](screenshots/xfce-lightdm-login-test.png) |
 
 ## Mission Packs
 
@@ -32,36 +35,50 @@ SageOS is a Debian bookworm-based live distro built for penetration testing and 
 | **password** | john, hydra, crunch, hashcat | Password auditing & cracking |
 | **wireless** | aircrack-ng, macchanger, reaver | Wireless security testing |
 | **sniffing** | tshark, ettercap-text-only, dsniff, bettercap | Traffic analysis & MITM |
-| **forensics** | binwalk, foremost, libimage-exiftool-perl, sleuthkit | Digital forensics |
+| **forensics** | binwalk, foremost, libimage-exiftool-perl, sleuthkit, testdisk, volatility3 | Digital forensics |
+| **modern** | nuclei, httpx, subfinder, naabu, ffuf, feroxbuster, rustscan | Fast Go/Rust recon & fuzzing tools |
+| **secrets** | gitleaks, trufflehog | Find leaked keys/secrets in code & repos |
+| **ad** | netexec, secretsdump.py, GetUserSPNs.py, psexec.py, wmiexec.py, evil-winrm | Active Directory / Windows attacks (pre-installed by default) |
+| **windows** | smbmap, polenum, ldap-utils, samba-common-bin, nbtscan | Windows/SMB enumeration from Linux |
+| **osint** | recon-ng, amass, sherlock | OSINT & recon on people/domains/infra |
+| **opsec** | tor, torsocks, proxychains4, bleachbit, secure-delete, wipe, mat2, age | Anonymity, secret handling, evidence cleanup |
+| **malware** | yara, clamav, upx, capa | Malware detection & static analysis |
+| **reveng** | radare2, gdb, gdb-multiarch, ltrace, strace, ropper, pwntools | Reverse engineering & exploit dev |
+| **xfce** | xfce4, xorg, lightdm | Optional graphical desktop environment |
 
-All packages are pulled directly from the official Debian bookworm repositories — no third-party repo, no dependency conflicts.
+Only **ad** ships pre-installed on the lean base ISO — every other pack is a `sage-pkg install <category>` away. Packages are pulled directly from official Debian bookworm repos where possible; a few modern tools (nuclei, gitleaks, amass, radare2, etc.) are fetched straight from upstream GitHub releases or pip since Debian doesn't package them.
 
 ## Getting Started
 
-### Download
+### Download (v5.3)
+
+Two ISO editions:
+
+- **`sageos-5.3.iso`** — the standard lean base. XFCE is available on-demand via `sage-pkg install xfce`.
+- **`sageos-5.3-xfce.iso`** — same base, with XFCE + lightdm **pre-installed and enabled**. Boots straight to a graphical desktop login.
 
 - **Direct download:** [Releases](../../releases/latest)
-- **Torrent:** [sageos-5.0.iso.torrent](https://github.com/zackmsa777-a11y/sageos/releases/download/v5.0/sageos-5.0.iso.torrent) (includes a GitHub webseed, so it downloads even with zero peers)
-- **Magnet link:**
-  ```
-  magnet:?xt=urn:btih:2f327a5f55168380304b61090b30bb50c2c7cf69&dn=sageos-5.0.iso&tr=udp%3A//tracker.opentrackr.org%3A1337/announce&tr=udp%3A//tracker.openbittorrent.com%3A6969/announce&tr=udp%3A//open.stealth.si%3A80/announce
-  ```
+- **Torrents:** [sageos-5.3.iso.torrent](https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3.iso.torrent) / [sageos-5.3-xfce.iso.torrent](https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3-xfce.iso.torrent) — both include a GitHub HTTP webseed, so they download even with zero peers
+- **Magnet links:** see the [v5.3 release notes](../../releases/tag/v5.3)
+- **Full source:** every release includes a `-full-source.zip` asset with the live-boot init script, boot configs, custom tooling, and a `MANIFEST.md` — everything needed to understand or rebuild the distro
+
+Default login: `sage` / `sageos` (or `root` / `sageos`).
 
 ### Boot it
 
 **QEMU:**
 ```bash
-qemu-system-x86_64 -m 2048 -cdrom sageos-5.0.iso -boot d
+qemu-system-x86_64 -m 2048 -cdrom sageos-5.3.iso -boot d
 ```
 
-**Real hardware / other hypervisors:** write the ISO to a USB drive or attach it as a virtual CD — it boots via both legacy BIOS and UEFI.
+**VirtualBox / real hardware:** write the ISO to a USB drive or attach it as a virtual CD — it boots via both legacy BIOS and UEFI. Only x86_64 is supported.
 
 ### Install a mission pack
 
 ```bash
 sage-pkg list                 # see all available categories
 sage-pkg install networking   # install a category
-sage-pkg check                # see what's installed
+sage-pkg status                # see what's installed
 ```
 
 Or launch the visual menu:
@@ -70,13 +87,21 @@ Or launch the visual menu:
 sage-security
 ```
 
+### Set up persistence
+
+```bash
+sage-persistence-setup
+```
+
+Formats a second disk/partition as an overlayfs upper layer so changes survive a reboot.
+
 ## Philosophy
 
 Most security distros try to ship every tool that ever existed. SageOS takes the opposite approach: a small, fast, reliable core — and mission packs you install only when you need them. Less bloat, faster boots, and a system you actually understand.
 
 ## Building from Source
 
-SageOS is built via chroot on a Debian bookworm rootfs, packaged into a hybrid BIOS/UEFI ISO. Build scripts and package definitions live in this repo for reference.
+SageOS is built via `debootstrap` + `chroot` on a Debian bookworm rootfs, packaged into a hybrid BIOS/UEFI ISO with `xorriso`. Build scripts, package definitions, boot configs, and the live-boot `initramfs/init` script all live in this repo — see each release's `-full-source.zip` for the exact snapshot used to build that ISO, plus a `MANIFEST.md` explaining the full boot flow (BIOS/UEFI → initramfs → squashfs+overlay → switch_root → OpenRC → login).
 
 ## License
 
