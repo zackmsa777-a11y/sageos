@@ -1,0 +1,18 @@
+#!/sbin/openrc-run
+description="Ensure systemd-udevd is running and input devices are tagged before X starts (works around the Debian udev LSB init.d script not reliably starting under OpenRC)"
+
+depend() {
+	before x11-common
+	before sage-gpu-modules
+}
+
+start() {
+	ebegin "Ensuring udev daemon is running and devices are tagged"
+	if ! pgrep -x systemd-udevd >/dev/null 2>&1; then
+		/lib/systemd/systemd-udevd --daemon
+		sleep 1
+	fi
+	udevadm trigger --action=add >/dev/null 2>&1
+	udevadm settle --timeout=10 >/dev/null 2>&1
+	eend 0
+}

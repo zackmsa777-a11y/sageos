@@ -270,8 +270,40 @@ cmd_install_one() {
             # silently overwrites /sbin/init with a symlink to systemd.
             # SageOS boots via OpenRC — restore the correct init target.
             ln -sf openrc-init /sbin/init
+            # Debian's udev LSB init.d script doesn't reliably start under
+            # OpenRC (silently stays "stopped"), leaving new input devices
+            # untagged (no ID_INPUT_KEYBOARD) so libinput/X never see the
+            # keyboard/mouse. Install a dedicated OpenRC service that starts
+            # udevd directly and triggers+settles device tagging before X.
+            if [[ ! -f /etc/init.d/sage-udev-fix ]]; then
+                cat > /etc/init.d/sage-udev-fix << 'UDEVEOF'
+#!/sbin/openrc-run
+description="Ensure systemd-udevd is running and input devices are tagged before X starts (works around the Debian udev LSB init.d script not reliably starting under OpenRC)"
+
+depend() {
+	before x11-common
+	before sage-gpu-modules
+}
+
+start() {
+	ebegin "Ensuring udev daemon is running and devices are tagged"
+	if ! pgrep -x systemd-udevd >/dev/null 2>&1; then
+		/lib/systemd/systemd-udevd --daemon
+		sleep 1
+	fi
+	udevadm trigger --action=add >/dev/null 2>&1
+	udevadm settle --timeout=10 >/dev/null 2>&1
+	eend 0
+}
+UDEVEOF
+                chmod 755 /etc/init.d/sage-udev-fix
+            fi
+            rc-update add sage-udev-fix default >/dev/null 2>&1
             rc-update add sage-gpu-modules default >/dev/null 2>&1
             rc-update add lightdm default >/dev/null 2>&1
+            # Best-effort for the CURRENT live session too (in case the
+            # user tries the graphical login without rebooting first).
+            modprobe evdev 2>/dev/null; modprobe psmouse 2>/dev/null; modprobe serio_raw 2>/dev/null
             echo -e "${GRN}Done.${RST} '$name' installed. ${CYAN}Reboot to reach the graphical login screen.${RST}"
         else
             echo -e "${GRN}Done.${RST} '$name' tools are ready to use."
@@ -297,6 +329,7 @@ cmd_remove_one() {
     if [[ "$cat" == "xfce" ]]; then
         rc-update del lightdm default >/dev/null 2>&1
         rc-update del sage-gpu-modules default >/dev/null 2>&1
+        rc-update del sage-udev-fix default >/dev/null 2>&1
     fi
     echo -e "${GRN}Done.${RST}"
 }
