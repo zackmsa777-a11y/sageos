@@ -56,6 +56,26 @@ load_mod sr_mod.ko
 # Disk
 load_mod sd_mod.ko
 
+# USB host controllers + storage — CRITICAL for real hardware. Most physical
+# installs boot from a USB flash drive, not a virtual CD (which is why this
+# was invisible in QEMU -cdrom testing: that emulates a SATA/IDE optical
+# drive, not a USB stick). Without these, the kernel has no way to expose a
+# USB-attached boot device as /dev/sd*, so the device-probe loop below finds
+# nothing and the boot fails on real hardware while QEMU tests pass clean.
+load_mod usb-common.ko
+load_mod usbcore.ko
+load_mod ehci-hcd.ko
+load_mod ehci-pci.ko
+load_mod uhci-hcd.ko
+load_mod xhci-hcd.ko
+load_mod xhci-pci.ko
+load_mod usb-storage.ko
+
+# NVMe — real hardware (and the persistence-volume scan below) may use an
+# NVMe SSD instead of SATA/USB. nvme-core needs t10-pi (already loaded above).
+load_mod nvme-core.ko
+load_mod nvme.ko
+
 # Loop device (for mounting squashfs from CD)
 load_mod loop.ko
 
@@ -114,13 +134,20 @@ load_mod mbcache.ko
 load_mod jbd2.ko
 load_mod ext4.ko
 
-# Give devices time to settle
+# Give devices time to settle. USB enumeration (control transfers, SCSI
+# INQUIRY over bulk endpoints) is measurably slower than virtio/SATA device
+# discovery, and was likely never exercised by prior QEMU testing (which
+# used -cdrom, a virtual SATA/IDE optical drive, not a real USB stick) — so
+# bump the settle time and re-scan once more to give USB storage a fair
+# chance to appear before we start probing for boot media below.
+sleep 3
+/bin/busybox mdev -s 2>/dev/null
 sleep 2
 /bin/busybox mdev -s 2>/dev/null
 /bin/busybox chmod 666 /dev/null /dev/zero /dev/full /dev/random /dev/urandom /dev/tty 2>/dev/null
 /bin/busybox chmod 620 /dev/console 2>/dev/null
 
-echo "[live] Block devices: $(ls /dev/sr* /dev/sd* /dev/vd* /dev/loop* 2>/dev/null)"
+echo "[live] Block devices: $(ls /dev/sr* /dev/sd* /dev/vd* /dev/nvme*n* /dev/loop* 2>/dev/null)"
 
 # Find the boot media
 SQUASHFS=""
@@ -128,7 +155,7 @@ LIVE_DEV=""
 MOUNT_POINT="/mnt/media"
 mkdir -p "$MOUNT_POINT"
 
-for dev in $(ls /dev/sr* /dev/sd* /dev/vd* 2>/dev/null); do
+for dev in $(ls /dev/sr* /dev/sd* /dev/vd* /dev/nvme*n*p* 2>/dev/null); do
   [ -b "$dev" ] || continue
   echo "[live] Probing $dev (max 5s each)..."
   /bin/busybox timeout 5 /bin/busybox mount -t iso9660 -o ro "$dev" "$MOUNT_POINT" 2>/dev/null || \
