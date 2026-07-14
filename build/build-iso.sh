@@ -4,12 +4,11 @@
 # Run this against a staged ISO tree (isolinux/, boot/, EFI/, efi.img)
 # to produce the final bootable .iso.
 #
-# NOTE: build.sh in this same directory is the original v1.0-era
-# BusyBox bootstrap script and is out of date for the current
-# Debian-based mission-pack build (rootfs-v3 pipeline). This script
-# documents just the final ISO-packing step, since it's the part
-# that caused two real regressions (see fixes below) and needs to
-# stay correct going forward.
+# SUPERSEDED: build.sh in this same directory is now the real, current,
+# versioned build script (debootstrap + OpenRC + sage-pkg pipeline,
+# v5.3+) and includes this exact ISO-packing step as its Stage 9 —
+# this standalone file is kept only for quick reference/manual reruns
+# against an already-staged ISO tree. Prefer build.sh end-to-end.
 # ============================================================
 set -e
 
