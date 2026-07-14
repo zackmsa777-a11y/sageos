@@ -276,6 +276,22 @@ cmd_install_one() {
             # causing the XFCE session to die instantly right after login
             # with no obvious error (xfce4-session/dbus fail silently).
             chown -R sage:sage /home/sage 2>/dev/null || true
+            # Make xfce4-terminal (VTE-based, proper truecolor + Unicode
+            # block glyph rendering) the default TerminalEmulator instead
+            # of falling back to plain xterm, whose default core bitmap
+            # font renders the dense 24-bit-truecolor block-art SageOS
+            # logo (in fastfetch) as a scrambled/glitchy mess.
+            mkdir -p /etc/xdg/xfce4
+            if [[ -f /etc/xdg/xfce4/helpers.rc ]]; then
+                sed -i 's/^TerminalEmulator=.*/TerminalEmulator=xfce4-terminal/' /etc/xdg/xfce4/helpers.rc
+            else
+                cat > /etc/xdg/xfce4/helpers.rc << 'HELPEOF'
+WebBrowser=debian-sensible-browser
+MailReader=thunderbird
+TerminalEmulator=xfce4-terminal
+FileManager=thunar
+HELPEOF
+            fi
             # Debian's udev LSB init.d script doesn't reliably start under
             # OpenRC (silently stays "stopped"), leaving new input devices
             # untagged (no ID_INPUT_KEYBOARD) so libinput/X never see the
