@@ -270,6 +270,12 @@ cmd_install_one() {
             # silently overwrites /sbin/init with a symlink to systemd.
             # SageOS boots via OpenRC — restore the correct init target.
             ln -sf openrc-init /sbin/init
+            # Ensure the sage user actually owns their own home directory.
+            # If it's root-owned (can happen from some rootfs build paths),
+            # sage can't write .Xauthority/.ICEauthority/.cache/.config,
+            # causing the XFCE session to die instantly right after login
+            # with no obvious error (xfce4-session/dbus fail silently).
+            chown -R sage:sage /home/sage 2>/dev/null || true
             # Debian's udev LSB init.d script doesn't reliably start under
             # OpenRC (silently stays "stopped"), leaving new input devices
             # untagged (no ID_INPUT_KEYBOARD) so libinput/X never see the
