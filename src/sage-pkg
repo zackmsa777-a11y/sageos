@@ -12,7 +12,7 @@ FETCH_CONF="/usr/local/share/sage-pkg/fetch-tools.conf"
 PIP_CONF="/usr/local/share/sage-pkg/pip-tools.conf"
 DESC_CONF="/usr/local/share/sage-pkg/tool-descriptions.conf"
 STATE_DIR="/var/lib/sage-pkg"
-SAGE_PKG_VERSION="2.0"
+SAGE_PKG_VERSION="2.1"
 CATALOG_BASE="https://raw.githubusercontent.com/zackmsa777-a11y/sageos/main/src/sage-pkg-catalog"
 CATALOG_DOCS_BASE="https://raw.githubusercontent.com/zackmsa777-a11y/sageos/main/docs"
 CATALOG_VERSION_FILE="/usr/local/share/sage-pkg/VERSION"
@@ -32,7 +32,8 @@ usage() {
     echo "  sage-pkg status                  Show which categories are installed"
     echo "  sage-pkg check [category]        Verify tools are actually present/working"
     echo "  sage-pkg search <term>           Search all categories for a tool"
-    echo "  sage-pkg update-catalog          Pull the latest categories/tools list from GitHub"
+    echo "  sage-pkg update [category|all]   Upgrade installed tools to their latest version (default: all installed)"
+    echo "  sage-pkg update-catalog          Pull the latest categories/tools list from GitHub (no upgrades)"
     exit 1
 }
 
@@ -439,6 +440,106 @@ cmd_search() {
     done < "$CONF"
 }
 
+cmd_update() {
+    local target="${1:-all}"
+
+    echo -e "${BOLD}${CYAN}Step 1/2: refreshing catalog...${RST}"
+    cmd_update_catalog || echo -e "${YEL}(catalog refresh failed — continuing with upgrade using the existing local catalog)${RST}"
+    echo ""
+    echo -e "${BOLD}${CYAN}Step 2/2: upgrading installed tools...${RST}"
+
+    local cats_to_update=()
+    if [[ "$target" == "all" ]]; then
+        for c in $(all_categories); do
+            [[ -f "$STATE_DIR/$c.installed" ]] && cats_to_update+=("$c")
+        done
+    else
+        if [[ -f "$STATE_DIR/$target.installed" ]]; then
+            cats_to_update+=("$target")
+        else
+            echo -e "${RED}'$target' is not installed${RST} — nothing to update. Run 'sage-pkg install $target' first."
+            return 1
+        fi
+    fi
+
+    if [[ ${#cats_to_update[@]} -eq 0 ]]; then
+        echo "No mission packs are installed yet — nothing to update."
+        return 0
+    fi
+
+    # Bucket every tool across the installed categories in scope by its
+    # effective install method, so apt tools get upgraded in ONE batched
+    # apt-get call (fast, resolves deps together) instead of one at a time.
+    local apt_pkgs=() fetch_pkgs=() pip_pkgs=() skip_builtin=()
+    for cat in "${cats_to_update[@]}"; do
+        local row; row=$(find_category "$cat")
+        [[ -z "$row" ]] && continue
+        local pkgs type; pkgs=$(get_field "$row" 4); type=$(get_field "$row" 5)
+        if [[ "$type" == "builtin" ]]; then
+            skip_builtin+=("$cat")
+            continue
+        fi
+        for p in $pkgs; do
+            local n; n=$(pkg_name "$p")
+            local t; t=$(pkg_type "$p" "$type")
+            case "$t" in
+                apt) apt_pkgs+=("$n") ;;
+                fetch) fetch_pkgs+=("$n") ;;
+                pip) pip_pkgs+=("$n") ;;
+            esac
+        done
+    done
+
+    # de-dup (a tool can appear in more than one category). Plain command
+    # substitution (not process substitution) — doesn't depend on /dev/fd,
+    # which may not exist if /proc isn't mounted in some environments.
+    [[ ${#apt_pkgs[@]} -gt 0 ]] && apt_pkgs=($(printf "%s\n" "${apt_pkgs[@]}" | sort -u))
+    [[ ${#fetch_pkgs[@]} -gt 0 ]] && fetch_pkgs=($(printf "%s\n" "${fetch_pkgs[@]}" | sort -u))
+    [[ ${#pip_pkgs[@]} -gt 0 ]] && pip_pkgs=($(printf "%s\n" "${pip_pkgs[@]}" | sort -u))
+
+    local any_upgraded=0
+
+    if [[ ${#apt_pkgs[@]} -gt 0 ]]; then
+        echo -e "${CYAN}Refreshing apt package lists...${RST}"
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq
+        echo -e "${CYAN}Upgrading ${#apt_pkgs[@]} apt-based tool(s): ${apt_pkgs[*]}${RST}"
+        if DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y "${apt_pkgs[@]}"; then
+            any_upgraded=1
+        else
+            echo -e "${YEL}Some apt tools failed to upgrade — see output above.${RST}"
+        fi
+    fi
+
+    if [[ ${#fetch_pkgs[@]} -gt 0 ]]; then
+        echo -e "${CYAN}Re-fetching ${#fetch_pkgs[@]} GitHub-release tool(s) to their latest release...${RST}"
+        for n in "${fetch_pkgs[@]}"; do
+            fetch_one "$n" && any_upgraded=1
+        done
+    fi
+
+    if [[ ${#pip_pkgs[@]} -gt 0 ]]; then
+        echo -e "${CYAN}Upgrading ${#pip_pkgs[@]} pip-based tool(s): ${pip_pkgs[*]}${RST}"
+        for n in "${pip_pkgs[@]}"; do
+            local row pip_pkg; row=$(grep -v "^#" "$PIP_CONF" | awk -F'|' -v tt="$n" '$1==tt')
+            pip_pkg=$(echo "$row" | cut -d'|' -f2)
+            if [[ -n "$pip_pkg" ]] && pip3 install --break-system-packages --quiet --upgrade "$pip_pkg" >/tmp/sage-pkg-pip.log 2>&1; then
+                echo -e "  ${GRN}upgraded${RST} $n"
+                any_upgraded=1
+            else
+                echo -e "  ${YEL}skipped/failed${RST} $n — see /tmp/sage-pkg-pip.log"
+            fi
+        done
+    fi
+
+    [[ ${#skip_builtin[@]} -gt 0 ]] && echo -e "${YEL}Skipped builtin pack(s): ${skip_builtin[*]}${RST} — pre-baked into the ISO, nothing to fetch at runtime."
+
+    if [[ ${#apt_pkgs[@]} -eq 0 && ${#fetch_pkgs[@]} -eq 0 && ${#pip_pkgs[@]} -eq 0 ]]; then
+        echo "Nothing to upgrade in scope (only builtin tools installed, or category has no external packages)."
+    else
+        echo -e "${GRN}Update complete.${RST} Run 'sage-pkg check' to verify everything's still in order."
+    fi
+}
+
 cmd_update_catalog() {
     echo -e "${BOLD}${CYAN}Updating sage-pkg catalog from GitHub...${RST}"
     local tmp; tmp=$(mktemp -d)
@@ -516,6 +617,7 @@ case "$1" in
     status) cmd_status ;;
     check) cmd_check "$2" ;;
     search) cmd_search "$2" ;;
+    update) cmd_update "$2" ;;
     update-catalog) cmd_update_catalog ;;
     *) usage ;;
 esac
