@@ -1,7 +1,7 @@
 {
   "catalog_format_version": "1.0",
   "catalog_version": "1.1",
-  "generated_utc": "2026-07-15T12:06:47Z",
+  "generated_utc": "2026-07-15T12:09:07Z",
   "source_repo": "https://github.com/zackmsa777-a11y/sageos",
   "install_hint": "sage-pkg install <category id>",
   "update_hint": "sage-pkg update-catalog",
@@ -118,9 +118,9 @@
         {
           "name": "feroxbuster",
           "install_method": "fetch",
-          "description": "Fast recursive content discovery tool for web directories/files (modern dirb/gobuster alternative)",
+          "description": "Fast recursive content discovery tool written in Rust",
           "github_repo": "epi052/feroxbuster",
-          "asset_pattern": "x86_64-linux-feroxbuster\\.zip"
+          "asset_pattern": "x86_64-linux-feroxbuster\\.tar\\.gz"
         }
       ]
     },
@@ -291,9 +291,9 @@
         {
           "name": "feroxbuster",
           "install_method": "fetch",
-          "description": "Fast recursive content discovery tool for web directories/files (modern dirb/gobuster alternative)",
+          "description": "Fast recursive content discovery tool written in Rust",
           "github_repo": "epi052/feroxbuster",
-          "asset_pattern": "x86_64-linux-feroxbuster\\.zip"
+          "asset_pattern": "x86_64-linux-feroxbuster\\.tar\\.gz"
         },
         {
           "name": "rustscan",

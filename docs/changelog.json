@@ -10,8 +10,7 @@
     "version": "1.1",
     "date": "2026-07-15T12:06:47Z",
     "changes": [
-      "Added feroxbuster (modern content-discovery tool) to the web category",
-      "web: added tool(s) \u2014 feroxbuster"
+      "Added feroxbuster (modern content-discovery tool, cross-listed in the web and modern categories)"
     ]
   }
 ]
