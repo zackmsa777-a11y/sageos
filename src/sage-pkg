@@ -16,6 +16,7 @@ SAGE_PKG_VERSION="2.1"
 CATALOG_BASE="https://raw.githubusercontent.com/zackmsa777-a11y/sageos/main/src/sage-pkg-catalog"
 CATALOG_DOCS_BASE="https://raw.githubusercontent.com/zackmsa777-a11y/sageos/main/docs"
 CATALOG_VERSION_FILE="/usr/local/share/sage-pkg/VERSION"
+SAGE_PKG_SELF_URL="https://raw.githubusercontent.com/zackmsa777-a11y/sageos/main/src/sage-pkg"
 mkdir -p "$STATE_DIR"
 
 CYAN='\033[36m'; MAG='\033[35m'; YEL='\033[33m'; GRN='\033[32m'; RED='\033[31m'; BOLD='\033[1m'; RST='\033[0m'
@@ -540,8 +541,31 @@ cmd_update() {
     fi
 }
 
+self_update_check() {
+    local self_path; self_path=$(command -v sage-pkg 2>/dev/null || echo "/usr/local/bin/sage-pkg")
+    local tmp; tmp=$(mktemp)
+    if ! curl -sfL "$SAGE_PKG_SELF_URL" -o "$tmp"; then
+        rm -f "$tmp"
+        return 1
+    fi
+    if [[ ! -s "$tmp" ]] || ! bash -n "$tmp" 2>/dev/null; then
+        echo -e "  ${YEL}downloaded sage-pkg failed a sanity check — skipping self-update this run${RST}"
+        rm -f "$tmp"
+        return 1
+    fi
+    if ! cmp -s "$tmp" "$self_path" 2>/dev/null; then
+        cp "$tmp" "$self_path"
+        chmod 755 "$self_path"
+        echo -e "  ${GRN}sage-pkg itself was updated${RST} to the latest version from GitHub."
+    fi
+    rm -f "$tmp"
+    return 0
+}
+
 cmd_update_catalog() {
     echo -e "${BOLD}${CYAN}Updating sage-pkg catalog from GitHub...${RST}"
+    echo "  checking for a newer sage-pkg itself..."
+    self_update_check
     local tmp; tmp=$(mktemp -d)
     local files="categories.conf fetch-tools.conf pip-tools.conf tool-descriptions.conf"
     local ok=1
