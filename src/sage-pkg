@@ -14,6 +14,8 @@ DESC_CONF="/usr/local/share/sage-pkg/tool-descriptions.conf"
 STATE_DIR="/var/lib/sage-pkg"
 SAGE_PKG_VERSION="2.0"
 CATALOG_BASE="https://raw.githubusercontent.com/zackmsa777-a11y/sageos/main/src/sage-pkg-catalog"
+CATALOG_DOCS_BASE="https://raw.githubusercontent.com/zackmsa777-a11y/sageos/main/docs"
+CATALOG_VERSION_FILE="/usr/local/share/sage-pkg/VERSION"
 mkdir -p "$STATE_DIR"
 
 CYAN='\033[36m'; MAG='\033[35m'; YEL='\033[33m'; GRN='\033[32m'; RED='\033[31m'; BOLD='\033[1m'; RST='\033[0m'
@@ -456,6 +458,14 @@ cmd_update_catalog() {
         find "$tmp" -delete
         return 1
     fi
+
+    # Version + changelog (best-effort — older sage-pkg installs upgrading for
+    # the first time won't have a local VERSION file yet, that's fine).
+    local old_version=""; [[ -f "$CATALOG_VERSION_FILE" ]] && old_version=$(cat "$CATALOG_VERSION_FILE")
+    local new_version=""
+    curl -sfL "$CATALOG_BASE/VERSION" -o "$tmp/VERSION" 2>/dev/null
+    [[ -s "$tmp/VERSION" ]] && new_version=$(cat "$tmp/VERSION")
+
     # backup then swap in atomically
     local backup="/usr/local/share/sage-pkg/.backup-$(date +%s)"
     mkdir -p "$backup"
@@ -465,8 +475,36 @@ cmd_update_catalog() {
     done
     find "$tmp" -delete
     local new_cats; new_cats=$(all_categories | wc -l)
-    echo -e "${GRN}Catalog updated.${RST} $new_cats categories now available (previous copy backed up to $backup)."
-    echo "Run 'sage-pkg list' to see what's new."
+
+    if [[ -n "$new_version" ]]; then
+        echo "$new_version" > "$CATALOG_VERSION_FILE"
+        if [[ -z "$old_version" ]]; then
+            echo -e "${GRN}Catalog updated${RST} to ${BOLD}v$new_version${RST} — $new_cats categories (previous copy backed up to $backup)."
+        elif [[ "$old_version" != "$new_version" ]]; then
+            echo -e "${GRN}Catalog updated${RST} from v$old_version to ${BOLD}v$new_version${RST} — $new_cats categories (previous copy backed up to $backup)."
+            echo -e "${CYAN}What changed:${RST}"
+            local changelog_tmp; changelog_tmp=$(mktemp)
+            if curl -sfL "https://raw.githubusercontent.com/zackmsa777-a11y/sageos/main/docs/changelog.json" -o "$changelog_tmp" 2>/dev/null && [[ -s "$changelog_tmp" ]] && command -v python3 &>/dev/null; then
+                python3 -c "
+import json
+try:
+    log = json.load(open('$changelog_tmp'))
+    for entry in log:
+        if entry.get('version') == '$new_version':
+            for c in entry.get('changes', []):
+                print('  - ' + c)
+except Exception:
+    pass
+"
+            fi
+            find "$changelog_tmp" -delete 2>/dev/null
+        else
+            echo -e "${GRN}Catalog refreshed${RST} — still on v$new_version, $new_cats categories (previous copy backed up to $backup)."
+        fi
+    else
+        echo -e "${GRN}Catalog updated.${RST} $new_cats categories now available (previous copy backed up to $backup)."
+    fi
+    echo "Run 'sage-pkg list' to see what's new. Full history: https://zackmsa777-a11y.github.io/sageos/changelog.html"
 }
 
 case "$1" in

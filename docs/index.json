@@ -1,9 +1,11 @@
 {
   "catalog_format_version": "1.0",
-  "generated_utc": "2026-07-15T10:16:43Z",
+  "catalog_version": "1.0",
+  "generated_utc": "2026-07-15T10:45:00Z",
   "source_repo": "https://github.com/zackmsa777-a11y/sageos",
   "install_hint": "sage-pkg install <category id>",
   "update_hint": "sage-pkg update-catalog",
+  "changelog_url": "changelog.json",
   "category_count": 15,
   "total_tool_count": 83,
   "categories": [

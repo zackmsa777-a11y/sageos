@@ -66,9 +66,11 @@
     version of this exact list, or <code>sage-pkg install &lt;category&gt;</code> to install one.
   </p>
   <div class="badges">
+    <span class="badge" id="badge-version">catalog v—</span>
     <span class="badge" id="badge-cats">— categories</span>
     <span class="badge" id="badge-tools">— tools</span>
     <span class="badge">generated <span id="badge-date">—</span></span>
+    <span class="badge"><a href="changelog.html">changelog</a></span>
     <span class="badge"><a href="index.json">raw index.json</a></span>
     <span class="badge"><a href="https://github.com/zackmsa777-a11y/sageos">source repo</a></span>
   </div>
@@ -84,6 +86,7 @@
 </footer>
 <script>
 fetch('index.json').then(r => r.json()).then(data => {
+  document.getElementById('badge-version').textContent = 'catalog v' + data.catalog_version;
   document.getElementById('badge-cats').textContent = data.category_count + ' categories';
   document.getElementById('badge-tools').textContent = data.total_tool_count + ' tools';
   document.getElementById('badge-date').textContent = data.generated_utc.slice(0, 10);
