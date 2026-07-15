@@ -12,7 +12,7 @@ FETCH_CONF="/usr/local/share/sage-pkg/fetch-tools.conf"
 PIP_CONF="/usr/local/share/sage-pkg/pip-tools.conf"
 DESC_CONF="/usr/local/share/sage-pkg/tool-descriptions.conf"
 STATE_DIR="/var/lib/sage-pkg"
-SAGE_PKG_VERSION="2.1.1"
+SAGE_PKG_VERSION="2.1.2"
 CATALOG_BASE="https://raw.githubusercontent.com/zackmsa777-a11y/sageos/main/src/sage-pkg-catalog"
 CATALOG_DOCS_BASE="https://raw.githubusercontent.com/zackmsa777-a11y/sageos/main/docs"
 CATALOG_VERSION_FILE="/usr/local/share/sage-pkg/VERSION"
@@ -543,7 +543,10 @@ cmd_update() {
 
 self_update_check() {
     local self_path; self_path=$(command -v sage-pkg 2>/dev/null || echo "/usr/local/bin/sage-pkg")
-    local tmp; tmp=$(mktemp)
+    local self_dir; self_dir=$(dirname "$self_path")
+    # Download into a temp file in the SAME directory as the destination (same
+    # filesystem — required for the rename below to be atomic).
+    local tmp; tmp=$(mktemp "$self_dir/.sage-pkg.XXXXXX" 2>/dev/null) || tmp=$(mktemp)
     if ! curl -sfL "$SAGE_PKG_SELF_URL" -o "$tmp"; then
         rm -f "$tmp"
         return 1
@@ -554,11 +557,23 @@ self_update_check() {
         return 1
     fi
     if ! cmp -s "$tmp" "$self_path" 2>/dev/null; then
-        cp "$tmp" "$self_path"
-        chmod 755 "$self_path"
+        chmod 755 "$tmp"
+        # IMPORTANT: rename (mv), never cp/overwrite-in-place, here. This
+        # script is CURRENTLY RUNNING from $self_path — bash reads a script
+        # file incrementally from disk as it executes, not all at once into
+        # memory. Overwriting $self_path's bytes in place (cp) can corrupt
+        # THIS process's own execution mid-run (observed once: garbled
+        # "line N: c: command not found" errors right after the in-place
+        # overwrite). A same-filesystem rename swaps the directory entry to
+        # a new inode instead — this process keeps its already-open file
+        # descriptor pointing at the untouched OLD inode and finishes
+        # executing its original bytes safely; only the NEXT invocation of
+        # sage-pkg opens the new file.
+        mv -f "$tmp" "$self_path"
         echo -e "  ${GRN}sage-pkg itself was updated${RST} to the latest version from GitHub."
+    else
+        rm -f "$tmp"
     fi
-    rm -f "$tmp"
     return 0
 }
 
