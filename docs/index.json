@@ -1,13 +1,13 @@
 {
   "catalog_format_version": "1.0",
-  "catalog_version": "1.0",
-  "generated_utc": "2026-07-15T10:45:00Z",
+  "catalog_version": "1.1",
+  "generated_utc": "2026-07-15T12:06:47Z",
   "source_repo": "https://github.com/zackmsa777-a11y/sageos",
   "install_hint": "sage-pkg install <category id>",
   "update_hint": "sage-pkg update-catalog",
   "changelog_url": "changelog.json",
   "category_count": 15,
-  "total_tool_count": 83,
+  "total_tool_count": 84,
   "categories": [
     {
       "id": "networking",
@@ -68,7 +68,7 @@
       "name": "Web Application Testing",
       "description": "Test websites and web apps for vulnerabilities",
       "type": "apt",
-      "tool_count": 9,
+      "tool_count": 10,
       "tools": [
         {
           "name": "sqlmap",
@@ -114,6 +114,13 @@
           "name": "wapiti",
           "install_method": "apt",
           "description": "Web vulnerability scanner (XSS, SQLi, and more)"
+        },
+        {
+          "name": "feroxbuster",
+          "install_method": "fetch",
+          "description": "Fast recursive content discovery tool for web directories/files (modern dirb/gobuster alternative)",
+          "github_repo": "epi052/feroxbuster",
+          "asset_pattern": "x86_64-linux-feroxbuster\\.zip"
         }
       ]
     },
@@ -284,9 +291,9 @@
         {
           "name": "feroxbuster",
           "install_method": "fetch",
-          "description": "Fast recursive content discovery tool written in Rust",
+          "description": "Fast recursive content discovery tool for web directories/files (modern dirb/gobuster alternative)",
           "github_repo": "epi052/feroxbuster",
-          "asset_pattern": "x86_64-linux-feroxbuster\\.tar\\.gz"
+          "asset_pattern": "x86_64-linux-feroxbuster\\.zip"
         },
         {
           "name": "rustscan",
