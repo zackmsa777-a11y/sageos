@@ -1,0 +1,591 @@
+{
+  "catalog_format_version": "1.0",
+  "generated_utc": "2026-07-15T10:16:43Z",
+  "source_repo": "https://github.com/zackmsa777-a11y/sageos",
+  "install_hint": "sage-pkg install <category id>",
+  "update_hint": "sage-pkg update-catalog",
+  "category_count": 15,
+  "total_tool_count": 83,
+  "categories": [
+    {
+      "id": "networking",
+      "name": "Networking & Recon",
+      "description": "Scan networks, discover hosts, map services",
+      "type": "apt",
+      "tool_count": 9,
+      "tools": [
+        {
+          "name": "nmap",
+          "install_method": "apt",
+          "description": "Scan hosts and networks to discover open ports and services"
+        },
+        {
+          "name": "masscan",
+          "install_method": "apt",
+          "description": "Extremely fast port scanner for large IP ranges"
+        },
+        {
+          "name": "arp-scan",
+          "install_method": "apt",
+          "description": "Discover live hosts on a local network via ARP"
+        },
+        {
+          "name": "netcat-openbsd",
+          "install_method": "apt",
+          "description": "Swiss-army-knife for raw TCP/UDP connections"
+        },
+        {
+          "name": "tcpdump",
+          "install_method": "apt",
+          "description": "Capture and inspect network traffic from the command line"
+        },
+        {
+          "name": "whois",
+          "install_method": "apt",
+          "description": "Look up domain/IP registration info"
+        },
+        {
+          "name": "dnsutils",
+          "install_method": "apt",
+          "description": "DNS lookup tools (dig, nslookup, host)"
+        },
+        {
+          "name": "traceroute",
+          "install_method": "apt",
+          "description": "Trace the network path packets take to a host"
+        },
+        {
+          "name": "mtr-tiny",
+          "install_method": "apt",
+          "description": "Combined traceroute + ping for live network diagnostics"
+        }
+      ]
+    },
+    {
+      "id": "web",
+      "name": "Web Application Testing",
+      "description": "Test websites and web apps for vulnerabilities",
+      "type": "apt",
+      "tool_count": 9,
+      "tools": [
+        {
+          "name": "sqlmap",
+          "install_method": "apt",
+          "description": "Automated SQL injection detection and exploitation"
+        },
+        {
+          "name": "whatweb",
+          "install_method": "apt",
+          "description": "Fingerprint the technology stack behind a website"
+        },
+        {
+          "name": "dirb",
+          "install_method": "apt",
+          "description": "Brute-force hidden directories/files on a web server"
+        },
+        {
+          "name": "gobuster",
+          "install_method": "apt",
+          "description": "Fast directory, DNS, and vhost brute-forcer"
+        },
+        {
+          "name": "wfuzz",
+          "install_method": "apt",
+          "description": "Flexible web application fuzzer"
+        },
+        {
+          "name": "sslscan",
+          "install_method": "apt",
+          "description": "Check a server's SSL/TLS configuration and ciphers"
+        },
+        {
+          "name": "wafw00f",
+          "install_method": "apt",
+          "description": "Detect and fingerprint web application firewalls"
+        },
+        {
+          "name": "fierce",
+          "install_method": "apt",
+          "description": "Domain reconnaissance and DNS enumeration"
+        },
+        {
+          "name": "wapiti",
+          "install_method": "apt",
+          "description": "Web vulnerability scanner (XSS, SQLi, and more)"
+        }
+      ]
+    },
+    {
+      "id": "password",
+      "name": "Password & Credential Attacks",
+      "description": "Crack hashes and brute-force logins",
+      "type": "apt",
+      "tool_count": 4,
+      "tools": [
+        {
+          "name": "john",
+          "install_method": "apt",
+          "description": "Password hash cracker (John the Ripper)"
+        },
+        {
+          "name": "hydra",
+          "install_method": "apt",
+          "description": "Fast network login brute-forcer (SSH, FTP, HTTP, etc.)"
+        },
+        {
+          "name": "crunch",
+          "install_method": "apt",
+          "description": "Wordlist generator for custom password lists"
+        },
+        {
+          "name": "hashcat",
+          "install_method": "apt",
+          "description": "GPU/CPU-accelerated password hash cracker"
+        }
+      ]
+    },
+    {
+      "id": "wireless",
+      "name": "Wireless Security",
+      "description": "Audit and attack Wi-Fi networks",
+      "type": "apt",
+      "tool_count": 3,
+      "tools": [
+        {
+          "name": "aircrack-ng",
+          "install_method": "apt",
+          "description": "Suite for auditing Wi-Fi network security (WEP/WPA)"
+        },
+        {
+          "name": "macchanger",
+          "install_method": "apt",
+          "description": "View/change your network card's MAC address"
+        },
+        {
+          "name": "reaver",
+          "install_method": "apt",
+          "description": "Brute-force attack against WPS-enabled Wi-Fi routers"
+        }
+      ]
+    },
+    {
+      "id": "sniffing",
+      "name": "Sniffing & MITM",
+      "description": "Capture and manipulate live traffic",
+      "type": "apt",
+      "tool_count": 4,
+      "tools": [
+        {
+          "name": "tshark",
+          "install_method": "apt",
+          "description": "Command-line network protocol analyzer (Wireshark engine)"
+        },
+        {
+          "name": "ettercap-text-only",
+          "install_method": "apt",
+          "description": "Man-in-the-middle attacks and traffic interception"
+        },
+        {
+          "name": "dsniff",
+          "install_method": "apt",
+          "description": "Suite of tools for network auditing and password sniffing"
+        },
+        {
+          "name": "bettercap",
+          "install_method": "apt",
+          "description": "Modern MITM framework for networks and Bluetooth/BLE"
+        }
+      ]
+    },
+    {
+      "id": "forensics",
+      "name": "Forensics & Analysis",
+      "description": "Investigate files, disks, and images",
+      "type": "mixed",
+      "tool_count": 6,
+      "tools": [
+        {
+          "name": "binwalk",
+          "install_method": "mixed",
+          "description": "Analyze and extract data hidden in firmware images"
+        },
+        {
+          "name": "foremost",
+          "install_method": "mixed",
+          "description": "Recover deleted files by carving file signatures"
+        },
+        {
+          "name": "libimage-exiftool-perl",
+          "install_method": "mixed",
+          "description": "Read/write/edit metadata (EXIF) in files"
+        },
+        {
+          "name": "sleuthkit",
+          "install_method": "mixed",
+          "description": "Command-line digital forensics toolkit"
+        },
+        {
+          "name": "testdisk",
+          "install_method": "mixed",
+          "description": "Recover lost partitions and undelete files"
+        },
+        {
+          "name": "volatility3",
+          "install_method": "pip",
+          "description": "Analyze memory dumps for forensic artifacts",
+          "pip_package": "volatility3"
+        }
+      ]
+    },
+    {
+      "id": "modern",
+      "name": "Modern Recon & Fuzzing",
+      "description": "Fast Go/Rust rewrites of classic recon tools",
+      "type": "fetch",
+      "tool_count": 7,
+      "tools": [
+        {
+          "name": "nuclei",
+          "install_method": "fetch",
+          "description": "Fast vulnerability scanner driven by community YAML templates",
+          "github_repo": "projectdiscovery/nuclei",
+          "asset_pattern": "linux_amd64\\.zip"
+        },
+        {
+          "name": "httpx",
+          "install_method": "fetch",
+          "description": "Fast, multi-purpose HTTP probing and recon toolkit",
+          "github_repo": "projectdiscovery/httpx",
+          "asset_pattern": "linux_amd64\\.zip"
+        },
+        {
+          "name": "subfinder",
+          "install_method": "fetch",
+          "description": "Passive subdomain discovery tool",
+          "github_repo": "projectdiscovery/subfinder",
+          "asset_pattern": "linux_amd64\\.zip"
+        },
+        {
+          "name": "naabu",
+          "install_method": "fetch",
+          "description": "Fast port scanner built for large-scale recon",
+          "github_repo": "projectdiscovery/naabu",
+          "asset_pattern": "linux_amd64\\.zip"
+        },
+        {
+          "name": "ffuf",
+          "install_method": "fetch",
+          "description": "Fast web fuzzer for directories, params, and vhosts",
+          "github_repo": "ffuf/ffuf",
+          "asset_pattern": "linux_amd64\\.tar\\.gz"
+        },
+        {
+          "name": "feroxbuster",
+          "install_method": "fetch",
+          "description": "Fast recursive content discovery tool written in Rust",
+          "github_repo": "epi052/feroxbuster",
+          "asset_pattern": "x86_64-linux-feroxbuster\\.tar\\.gz"
+        },
+        {
+          "name": "rustscan",
+          "install_method": "fetch",
+          "description": "Extremely fast port scanner, pipes results into nmap",
+          "github_repo": "bee-san/RustScan",
+          "asset_pattern": "x86_64-linux-rustscan\\.tar\\.gz\\.zip"
+        }
+      ]
+    },
+    {
+      "id": "secrets",
+      "name": "Secret & Credential Scanning",
+      "description": "Find leaked keys and secrets in code/repos",
+      "type": "fetch",
+      "tool_count": 2,
+      "tools": [
+        {
+          "name": "gitleaks",
+          "install_method": "fetch",
+          "description": "Scan git repos for hardcoded secrets and API keys",
+          "github_repo": "gitleaks/gitleaks",
+          "asset_pattern": "linux_x64\\.tar\\.gz"
+        },
+        {
+          "name": "trufflehog",
+          "install_method": "fetch",
+          "description": "Find leaked credentials/secrets across code and history",
+          "github_repo": "trufflesecurity/trufflehog",
+          "asset_pattern": "linux_amd64\\.tar\\.gz"
+        }
+      ]
+    },
+    {
+      "id": "ad",
+      "name": "Active Directory & Windows",
+      "description": "Attack and enumerate Windows/AD environments",
+      "type": "builtin",
+      "tool_count": 6,
+      "tools": [
+        {
+          "name": "netexec",
+          "install_method": "builtin",
+          "description": "Swiss-army-knife for AD/network protocol exploitation (successor to CrackMapExec)"
+        },
+        {
+          "name": "secretsdump.py",
+          "install_method": "builtin",
+          "description": "Dump password hashes remotely from Windows/AD (Impacket)"
+        },
+        {
+          "name": "GetUserSPNs.py",
+          "install_method": "builtin",
+          "description": "Kerberoasting \u2014 extract crackable service account hashes"
+        },
+        {
+          "name": "psexec.py",
+          "install_method": "builtin",
+          "description": "Remote command execution on Windows via SMB (Impacket)"
+        },
+        {
+          "name": "wmiexec.py",
+          "install_method": "builtin",
+          "description": "Remote command execution on Windows via WMI (Impacket)"
+        },
+        {
+          "name": "evil-winrm",
+          "install_method": "builtin",
+          "description": "Interactive shell for Windows Remote Management (WinRM)"
+        }
+      ]
+    },
+    {
+      "id": "windows",
+      "name": "Windows & SMB Enumeration",
+      "description": "Probe and enumerate Windows/SMB targets from Linux",
+      "type": "apt",
+      "tool_count": 5,
+      "tools": [
+        {
+          "name": "smbmap",
+          "install_method": "apt",
+          "description": "Enumerate SMB shares and permissions on Windows hosts"
+        },
+        {
+          "name": "polenum",
+          "install_method": "apt",
+          "description": "Dump Windows password/lockout policy over SMB"
+        },
+        {
+          "name": "ldap-utils",
+          "install_method": "apt",
+          "description": "Command-line LDAP query and management tools"
+        },
+        {
+          "name": "samba-common-bin",
+          "install_method": "apt",
+          "description": "Samba client utilities (net, smbclient helpers)"
+        },
+        {
+          "name": "nbtscan",
+          "install_method": "apt",
+          "description": "Scan networks for NetBIOS name information"
+        }
+      ]
+    },
+    {
+      "id": "osint",
+      "name": "OSINT & Recon",
+      "description": "Gather intel on people, domains, and infrastructure",
+      "type": "mixed",
+      "tool_count": 3,
+      "tools": [
+        {
+          "name": "recon-ng",
+          "install_method": "mixed",
+          "description": "Full-featured web reconnaissance framework"
+        },
+        {
+          "name": "amass",
+          "install_method": "fetch",
+          "description": "In-depth attack surface mapping and subdomain enumeration",
+          "github_repo": "OWASP/Amass",
+          "asset_pattern": "linux_amd64\\.tar\\.gz"
+        },
+        {
+          "name": "sherlock",
+          "install_method": "pip",
+          "description": "Hunt usernames across hundreds of social networks",
+          "pip_package": "sherlock-project"
+        }
+      ]
+    },
+    {
+      "id": "opsec",
+      "name": "OpSec & Anonymity",
+      "description": "Anonymize traffic, manage secrets, and clean traces",
+      "type": "apt",
+      "tool_count": 8,
+      "tools": [
+        {
+          "name": "tor",
+          "install_method": "apt",
+          "description": "Anonymity network for routing traffic through relays"
+        },
+        {
+          "name": "torsocks",
+          "install_method": "apt",
+          "description": "Force any app to route its traffic through Tor"
+        },
+        {
+          "name": "proxychains4",
+          "install_method": "apt",
+          "description": "Chain proxies (incl. Tor) in front of any command"
+        },
+        {
+          "name": "bleachbit",
+          "install_method": "apt",
+          "description": "Clean temp files, caches, and traces of activity"
+        },
+        {
+          "name": "secure-delete",
+          "install_method": "apt",
+          "description": "Securely wipe files, free space, swap, and memory"
+        },
+        {
+          "name": "wipe",
+          "install_method": "apt",
+          "description": "Securely erase files so they can't be recovered"
+        },
+        {
+          "name": "mat2",
+          "install_method": "apt",
+          "description": "Strip metadata (EXIF, etc.) from documents and media"
+        },
+        {
+          "name": "age",
+          "install_method": "apt",
+          "description": "Simple, modern file encryption tool"
+        }
+      ]
+    },
+    {
+      "id": "malware",
+      "name": "Malware Analysis",
+      "description": "Detect, unpack, and analyze malicious binaries",
+      "type": "mixed",
+      "tool_count": 4,
+      "tools": [
+        {
+          "name": "yara",
+          "install_method": "mixed",
+          "description": "Pattern-match rules to identify and classify malware"
+        },
+        {
+          "name": "clamav",
+          "install_method": "mixed",
+          "description": "Open-source antivirus engine and signature scanner"
+        },
+        {
+          "name": "upx",
+          "install_method": "fetch",
+          "description": "Pack/unpack executables (also used to unpack malware samples)",
+          "github_repo": "upx/upx",
+          "asset_pattern": "amd64_linux\\.tar\\.xz"
+        },
+        {
+          "name": "capa",
+          "install_method": "fetch",
+          "description": "Detect capabilities in executable files (malware triage)",
+          "github_repo": "mandiant/capa",
+          "asset_pattern": "linux\\.zip"
+        }
+      ]
+    },
+    {
+      "id": "reveng",
+      "name": "Reverse Engineering & Exploit Dev",
+      "description": "Disassemble, debug, and build exploits",
+      "type": "mixed",
+      "tool_count": 7,
+      "tools": [
+        {
+          "name": "radare2",
+          "install_method": "fetch",
+          "description": "Full-featured reverse engineering and binary analysis framework",
+          "github_repo": "radareorg/radare2",
+          "asset_pattern": "radare2_[0-9].*_amd64\\.deb"
+        },
+        {
+          "name": "gdb",
+          "install_method": "mixed",
+          "description": "The GNU debugger \u2014 step through and inspect running programs"
+        },
+        {
+          "name": "gdb-multiarch",
+          "install_method": "mixed",
+          "description": "GDB with support for debugging non-native architectures"
+        },
+        {
+          "name": "ltrace",
+          "install_method": "mixed",
+          "description": "Trace library calls made by a program"
+        },
+        {
+          "name": "strace",
+          "install_method": "mixed",
+          "description": "Trace system calls made by a program"
+        },
+        {
+          "name": "ropper",
+          "install_method": "pip",
+          "description": "Find and build ROP gadgets for exploit development",
+          "pip_package": "ropper"
+        },
+        {
+          "name": "pwntools",
+          "install_method": "pip",
+          "description": "CTF/exploit-development framework and library",
+          "pip_package": "pwntools"
+        }
+      ]
+    },
+    {
+      "id": "xfce",
+      "name": "Desktop Environment",
+      "description": "Optional graphical desktop (XFCE + lightdm) for users who want a GUI",
+      "type": "apt",
+      "tool_count": 6,
+      "tools": [
+        {
+          "name": "xfce4",
+          "install_method": "apt",
+          "description": ""
+        },
+        {
+          "name": "xorg",
+          "install_method": "apt",
+          "description": ""
+        },
+        {
+          "name": "lightdm",
+          "install_method": "apt",
+          "description": ""
+        },
+        {
+          "name": "kmod",
+          "install_method": "apt",
+          "description": ""
+        },
+        {
+          "name": "dbus-x11",
+          "install_method": "apt",
+          "description": ""
+        },
+        {
+          "name": "xfce4-terminal",
+          "install_method": "apt",
+          "description": ""
+        }
+      ]
+    }
+  ]
+}
