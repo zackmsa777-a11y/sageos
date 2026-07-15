@@ -3,18 +3,16 @@
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
-# Safety net: PID 1 must NEVER actually exit or the kernel panics with
-# "Attempted to kill init!". If anything in this script below causes the
-# interpreter itself to terminate unexpectedly (a crash, an unhandled
-# signal, a stray exit, hardware-specific busybox misbehavior, etc.),
-# fall back to an interactive shell instead of taking the whole machine
-# down. This does NOT protect against a crash of the real init *after*
-# switch_root (that process fully replaces us), but it covers every
-# failure mode while we are still in the initramfs stage.
+# safety net: PID 1 can never actually exit or the kernel panics with
+# "Attempted to kill init!". if this script dies unexpectedly (crash,
+# stray exit, weird busybox behavior on some hardware) drop to a shell
+# instead of taking the whole machine down. doesn't cover a crash of the
+# real init after switch_root (that process replaces us entirely), just
+# the initramfs stage.
 trap 'echo "[live] init exited unexpectedly (code $?) - respawning emergency shell"; exec /bin/busybox sh' EXIT
 
-# Mount essential filesystems (mountpoint dirs must exist first —
-# the initramfs cpio image doesn't ship them, unlike a real rootfs)
+# mount essential filesystems (mountpoint dirs have to exist first, the
+# initramfs cpio doesn't ship them like a real rootfs would)
 /bin/busybox mkdir -p /proc /sys /dev /mnt /tmp /run
 /bin/busybox mount -t proc none /proc
 /bin/busybox mount -t sysfs none /sys
@@ -56,12 +54,12 @@ load_mod sr_mod.ko
 # Disk
 load_mod sd_mod.ko
 
-# USB host controllers + storage — CRITICAL for real hardware. Most physical
-# installs boot from a USB flash drive, not a virtual CD (which is why this
-# was invisible in QEMU -cdrom testing: that emulates a SATA/IDE optical
-# drive, not a USB stick). Without these, the kernel has no way to expose a
-# USB-attached boot device as /dev/sd*, so the device-probe loop below finds
-# nothing and the boot fails on real hardware while QEMU tests pass clean.
+# USB host controllers + storage — critical for real hardware. most physical
+# installs boot off a USB stick, not a virtual CD, which is why this was
+# invisible in QEMU -cdrom testing (that's a SATA/IDE optical drive, not
+# USB). without these the kernel can't expose a USB boot device as
+# /dev/sd*, so the probe loop below finds nothing and real hardware fails
+# while QEMU passes clean.
 load_mod usb-common.ko
 load_mod usbcore.ko
 load_mod ehci-hcd.ko
@@ -71,8 +69,8 @@ load_mod xhci-hcd.ko
 load_mod xhci-pci.ko
 load_mod usb-storage.ko
 
-# NVMe — real hardware (and the persistence-volume scan below) may use an
-# NVMe SSD instead of SATA/USB. nvme-core needs t10-pi (already loaded above).
+# NVMe — real hardware (and the persistence scan below) might use an NVMe
+# SSD instead of SATA/USB. nvme-core needs t10-pi, already loaded above.
 load_mod nvme-core.ko
 load_mod nvme.ko
 
@@ -104,20 +102,19 @@ load_mod virtio_balloon.ko
 load_mod virtio_input.ko
 load_mod virtio-rng.ko
 
-# PS/2 keyboard/mouse core + generic event interface. Without evdev.ko,
-# NO input device (PS/2, virtio-input, or USB) can expose a /dev/input/eventX
-# node, which breaks all keyboard/mouse input under X11/libinput on every
-# hypervisor (QEMU, VirtualBox) and real hardware alike. serio_raw/psmouse
-# add PS/2 mouse support (atkbd/i8042 for keyboard are kernel built-ins).
+# PS/2 keyboard/mouse core + generic event interface. without evdev.ko no
+# input device — PS/2, virtio-input, USB, doesn't matter — can expose a
+# /dev/input/eventX node, which breaks keyboard/mouse everywhere under
+# X11/libinput. serio_raw/psmouse add PS/2 mouse (atkbd/i8042 for keyboard
+# are already built into the kernel).
 load_mod serio_raw.ko
 load_mod psmouse.ko
 load_mod evdev.ko
 
-# Virtio GPU DRM stack — cec.ko and virtio-gpu.ko still fail with
-# unresolved symbols on this kernel build (missing rc-core / virtio_dma_buf
-# helpers we don't ship) and only waste boot time under slow/unaccelerated
-# emulation, so we skip loading them. Standard VGA/framebuffer display
-# still works; only 3D/DRM accel is unavailable.
+# virtio GPU DRM stack — cec.ko and virtio-gpu.ko still fail with unresolved
+# symbols on this kernel build (missing rc-core/virtio_dma_buf helpers we
+# don't ship) and just waste boot time under slow emulation, so skip them.
+# plain VGA/framebuffer still works, just no 3D/DRM accel.
 load_mod drm.ko
 load_mod drm_shmem_helper.ko
 load_mod drm_kms_helper.ko
@@ -134,12 +131,11 @@ load_mod mbcache.ko
 load_mod jbd2.ko
 load_mod ext4.ko
 
-# Give devices time to settle. USB enumeration (control transfers, SCSI
-# INQUIRY over bulk endpoints) is measurably slower than virtio/SATA device
-# discovery, and was likely never exercised by prior QEMU testing (which
-# used -cdrom, a virtual SATA/IDE optical drive, not a real USB stick) — so
-# bump the settle time and re-scan once more to give USB storage a fair
-# chance to appear before we start probing for boot media below.
+# give devices time to settle. USB enumeration (control transfers, SCSI
+# INQUIRY over bulk endpoints) is a lot slower than virtio/SATA, and older
+# QEMU testing never caught this since -cdrom doesn't exercise it. bump
+# the settle time and rescan once more so USB storage has a fair shot at
+# showing up before we start probing for boot media.
 sleep 3
 /bin/busybox mdev -s 2>/dev/null
 sleep 2
@@ -178,20 +174,19 @@ if [ -z "$SQUASHFS" ]; then
   exec /bin/busybox sh
 fi
 
-# Copy squashfs into RAM before mounting.
-# Reading a compressed squashfs live off a virtual optical drive works,
-# but on VirtualBox's ATAPI/IDE CD-ROM emulation every random-access read
-# for decompression is slow (unlike QEMU virtio or real hardware), so the
-# *entire session* (not just boot) drags. Copying once into tmpfs turns
-# every read after this point into a RAM read, at the cost of one linear
-# copy up front (much faster than the repeated slow reads it replaces).
+# copy squashfs into RAM before mounting. reading it live off a virtual
+# optical drive works, but VirtualBox's ATAPI/IDE CD-ROM emulation makes
+# every random-access decompression read slow (unlike QEMU virtio or real
+# hardware), dragging the whole session, not just boot. copying once into
+# tmpfs turns every read after this into a RAM read — costs one linear
+# copy up front but way faster than the alternative.
 SQUASHFS_SIZE=$(/bin/busybox stat -c %s "$SQUASHFS" 2>/dev/null || echo 0)
 SQUASHFS_KB=$((SQUASHFS_SIZE / 1024))
 MEMTOTAL_KB=$(/bin/busybox awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null || echo 0)
-# Only copy to RAM if we have at least 2x the squashfs size free (squashfs + headroom for the running OS)
-# NOTE: stay in KB throughout — busybox ash arithmetic overflows 32-bit signed
-# range if we convert to bytes on a system with >2GB RAM (2GB in bytes alone
-# exceeds INT32_MAX), which silently breaks the comparison.
+# only copy to RAM if we have at least 2x the squashfs size free (squashfs + headroom for the running OS)
+# stay in KB the whole way through — busybox ash arithmetic overflows 32-bit
+# signed range if we convert to bytes on a box with >2GB RAM (2GB in bytes
+# alone blows past INT32_MAX), which silently breaks the comparison.
 if [ "$SQUASHFS_KB" -gt 0 ] && [ "$MEMTOTAL_KB" -gt $((SQUASHFS_KB * 2)) ]; then
   echo "[live] Copying squashfs to RAM ($((SQUASHFS_KB / 1024))MB, this can take a bit on slow virtual CD-ROMs)..."
   mkdir -p /mnt/ramsquash
@@ -229,13 +224,12 @@ if ! /bin/busybox mount -t squashfs -o ro "$LOOPDEV" /mnt/ro; then
 fi
 echo "[live] Mounted squashfs rootfs"
 
-# --- Persistence detection ---
-# Look for a separate ext4 volume (a second disk/partition, not the
-# device we booted from) carrying a marker file. Created by running
-# `sage-persistence-setup` from inside an already-booted SageOS session.
-# If found, real writes (installed packs, home dir, config changes) land
-# there and survive reboot. If not found, we fall back to tmpfs like
-# before (works during the session, wiped on reboot).
+# --- persistence detection ---
+# look for a separate ext4 volume (a second disk/partition, not whatever we
+# booted from) with a marker file, created by running sage-persistence-setup
+# from an already-booted session. if found, writes (installed packs, home
+# dir, config) land there and survive reboot. if not, fall back to tmpfs
+# like before — works during the session, wiped on reboot.
 PERSIST_DEV=""
 mkdir -p /mnt/persist
 echo "[live] Scanning for persistence volume (max 5s per device)..."
@@ -280,9 +274,9 @@ else
   }
 fi
 
-# Verify init exists. Prefer /sbin/init (the real distro init, e.g. OpenRC)
-# over /init (a legacy custom bootstrap script), falling back to /init only
-# if no /sbin/init is present.
+# prefer /sbin/init (the real distro init, e.g. OpenRC) over /init (a
+# legacy custom bootstrap script) — only fall back to /init if /sbin/init
+# isn't there
 if [ -f /mnt/overlay/sbin/init ]; then
   echo "[live] Using /sbin/init (real init system)"
   INIT_TARGET="/sbin/init"

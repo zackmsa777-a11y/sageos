@@ -156,7 +156,7 @@ def main():
     now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     if changes is None:
-        # No prior versioned baseline — this run establishes v1.0.
+        # no prior baseline, this run just establishes v1.0
         version = "1.0"
         entry_changes = [note] if note else []
         entry_changes.append(f"Initial versioned catalog: {len(new_categories)} categories, {total_tools} tools.")
@@ -166,8 +166,7 @@ def main():
         entry_changes = ([note] if note else []) + changes
         changelog.append({"version": version, "date": now, "changes": entry_changes})
     else:
-        # No detected changes — keep the same version, don't add a changelog entry
-        # unless the caller passed an explicit note.
+        # nothing changed, keep the version as-is unless a manual note was passed
         version = old_version or "1.0"
         if note:
             changelog.append({"version": version, "date": now, "changes": [note]})
@@ -191,8 +190,7 @@ def main():
     with open(CHANGELOG_PATH, "w") as f:
         json.dump(changelog, f, indent=2)
 
-    # Also write a plain VERSION file sage-pkg can fetch cheaply (single line,
-    # no JSON parsing needed in bash).
+    # also drop a plain VERSION file — cheap for sage-pkg to fetch, no JSON parsing in bash
     version_path = os.path.join(SRC, "sage-pkg-catalog", "VERSION")
     with open(version_path, "w") as f:
         f.write(version + "\n")
