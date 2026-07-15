@@ -1,11 +1,9 @@
 #!/bin/bash
-# sage-pkg — SageOS mission-pack installer
-# Wraps apt-get / GitHub releases / pip with curated cybersecurity tool categories.
-# category type (col 5): apt (all tools via apt) | builtin (pre-baked, can't be removed)
-#     | fetch (all tools downloaded from GitHub releases) | mixed (per-tool override)
-# Per-tool override: append @apt, @fetch, or @pip to a tool name in the packages
-# column to force that tool's install method regardless of the category's default
-# type — e.g. "recon-ng amass@fetch sherlock@pip" in a category typed "mixed".
+# sage-pkg — installs/manages SageOS mission packs (apt + GitHub binaries + pip, one interface)
+#
+# categories.conf col 5 = category type: apt | builtin (pre-baked, can't remove) | fetch (github releases) | mixed
+# tag any tool with @apt/@fetch/@pip to override its install method regardless of category type
+# e.g. "recon-ng amass@fetch sherlock@pip" inside a "mixed" category
 
 CONF="/usr/local/share/sage-pkg/categories.conf"
 FETCH_CONF="/usr/local/share/sage-pkg/fetch-tools.conf"
@@ -54,11 +52,10 @@ tool_desc() {
     if [[ -n "$line" ]]; then echo "$line" | cut -d'|' -f2; else echo "(no description yet)"; fi
 }
 
-# Strip an optional @apt / @fetch / @pip override suffix, return bare tool name
+# strip the @type suffix if there is one, we just want the bare tool name
 pkg_name() { echo "${1%%@*}"; }
 
-# Resolve a token's effective install type: its own @suffix if present,
-# else the category's default type (with "mixed" itself falling back to apt).
+# @suffix wins if present, otherwise fall back to the category's default type (mixed -> apt)
 pkg_type() {
     local token="$1" cat_type="$2"
     if [[ "$token" == *"@"* ]]; then
@@ -70,10 +67,8 @@ pkg_type() {
     fi
 }
 
-# Resolve the binary name actually placed on PATH for a token. For pip-type
-# tools this can differ from the tool name (e.g. pwntools -> `pwn`,
-# volatility3 -> `vol`) — look it up from pip-tools.conf. Everything else
-# (apt, fetch, builtin) uses the bare tool name as-is.
+# pip packages don't always match their binary name (pwntools -> pwn, volatility3 -> vol),
+# check pip-tools.conf for those. everything else (apt/fetch/builtin) just uses the tool name.
 effective_bin() {
     local token="$1" cat_type="$2"
     local n; n=$(pkg_name "$token")
@@ -155,7 +150,7 @@ fetch_one() {
     local fname="$tmp/asset"
     if ! curl -sL "$url" -o "$fname"; then echo -e "  ${RED}download failed for $tool${RST}"; find "$tmp" -delete; return 1; fi
 
-    # .deb release asset — install via dpkg, resolving deps with apt-get -f
+    # .deb asset -> dpkg -i, then apt-get -f to sort out any missing deps
     if [[ "$url" == *.deb ]]; then
         if dpkg -i "$fname" >/tmp/sage-pkg-dpkg.log 2>&1 || apt-get install -f -y >>/tmp/sage-pkg-dpkg.log 2>&1; then
             echo -e "  ${GRN}installed${RST} $tool (.deb)"
@@ -174,7 +169,7 @@ fetch_one() {
         *.tar.xz) tar xJf "$fname" -C "$ex" 2>/dev/null ;;
         *) tar xzf "$fname" -C "$ex" 2>/dev/null ;;
     esac
-    # handle nested archive (e.g. a .tar.gz inside a .zip)
+    # some releases ship a .tar.gz inside the .zip, unwrap it
     local nested; nested=$(find "$ex" -name "*.tar.gz" -type f | head -1)
     [[ -n "$nested" ]] && tar xzf "$nested" -C "$ex" 2>/dev/null
     local bin; bin=$(find "$ex" -type f -iname "$tool" | head -1)
@@ -233,8 +228,7 @@ remove_token() {
     esac
 }
 
-# Fresh SageOS ISOs ship with empty apt lists to stay lean — refresh them
-# once, transparently, the first time any category actually needs apt.
+# apt lists are empty on a fresh ISO to stay lean, refresh once the first time apt is actually needed
 ensure_apt_lists() {
     if ! ls /var/lib/apt/lists/*Packages* >/dev/null 2>&1; then
         echo -e "  ${CYAN}First install this boot — refreshing package lists (apt-get update)...${RST}"
@@ -270,21 +264,15 @@ cmd_install_one() {
     if [[ "$fail" == "0" ]]; then
         touch "$STATE_DIR/$cat.installed"
         if [[ "$cat" == "xfce" ]]; then
-            # xfce/lightdm pull in systemd-sysv as a dependency, which
-            # silently overwrites /sbin/init with a symlink to systemd.
-            # SageOS boots via OpenRC — restore the correct init target.
+            # xfce/lightdm drag in systemd-sysv, which quietly overwrites /sbin/init with
+            # a systemd symlink. we boot OpenRC, so put it back.
             ln -sf openrc-init /sbin/init
-            # Ensure the sage user actually owns their own home directory.
-            # If it's root-owned (can happen from some rootfs build paths),
-            # sage can't write .Xauthority/.ICEauthority/.cache/.config,
-            # causing the XFCE session to die instantly right after login
-            # with no obvious error (xfce4-session/dbus fail silently).
+            # home dir sometimes ends up root-owned depending on how the rootfs was built.
+            # if sage can't write .Xauthority/.cache/.config the session just dies right
+            # after login with zero error output, so make sure he actually owns it.
             chown -R sage:sage /home/sage 2>/dev/null || true
-            # Make xfce4-terminal (VTE-based, proper truecolor + Unicode
-            # block glyph rendering) the default TerminalEmulator instead
-            # of falling back to plain xterm, whose default core bitmap
-            # font renders the dense 24-bit-truecolor block-art SageOS
-            # logo (in fastfetch) as a scrambled/glitchy mess.
+            # default to xfce4-terminal, not xterm — xterm's bitmap font mangles the
+            # fastfetch logo's truecolor block art into a glitchy mess
             mkdir -p /etc/xdg/xfce4
             if [[ -f /etc/xdg/xfce4/helpers.rc ]]; then
                 sed -i 's/^TerminalEmulator=.*/TerminalEmulator=xfce4-terminal/' /etc/xdg/xfce4/helpers.rc
@@ -296,11 +284,9 @@ TerminalEmulator=xfce4-terminal
 FileManager=thunar
 HELPEOF
             fi
-            # Debian's udev LSB init.d script doesn't reliably start under
-            # OpenRC (silently stays "stopped"), leaving new input devices
-            # untagged (no ID_INPUT_KEYBOARD) so libinput/X never see the
-            # keyboard/mouse. Install a dedicated OpenRC service that starts
-            # udevd directly and triggers+settles device tagging before X.
+            # debian's udev init.d script doesn't reliably come up under OpenRC (just sits
+            # "stopped"), so input devices never get tagged and X can't see keyboard/mouse.
+            # run udevd directly instead via its own OpenRC service.
             if [[ ! -f /etc/init.d/sage-udev-fix ]]; then
                 cat > /etc/init.d/sage-udev-fix << 'UDEVEOF'
 #!/sbin/openrc-run
@@ -327,8 +313,7 @@ UDEVEOF
             rc-update add sage-udev-fix default >/dev/null 2>&1
             rc-update add sage-gpu-modules default >/dev/null 2>&1
             rc-update add lightdm default >/dev/null 2>&1
-            # Best-effort for the CURRENT live session too (in case the
-            # user tries the graphical login without rebooting first).
+            # also fix it live, in case they try logging in graphically before rebooting
             modprobe evdev 2>/dev/null; modprobe psmouse 2>/dev/null; modprobe serio_raw 2>/dev/null
             echo -e "${GRN}Done.${RST} '$name' installed. ${CYAN}Reboot to reach the graphical login screen.${RST}"
         else
@@ -468,9 +453,8 @@ cmd_update() {
         return 0
     fi
 
-    # Bucket every tool across the installed categories in scope by its
-    # effective install method, so apt tools get upgraded in ONE batched
-    # apt-get call (fast, resolves deps together) instead of one at a time.
+    # group everything by install method first so apt tools upgrade in one batched
+    # call instead of one at a time
     local apt_pkgs=() fetch_pkgs=() pip_pkgs=() skip_builtin=()
     for cat in "${cats_to_update[@]}"; do
         local row; row=$(find_category "$cat")
@@ -491,9 +475,9 @@ cmd_update() {
         done
     done
 
-    # de-dup (a tool can appear in more than one category). Plain command
-    # substitution (not process substitution) — doesn't depend on /dev/fd,
-    # which may not exist if /proc isn't mounted in some environments.
+    # de-dup since a tool can live in more than one category. plain command substitution
+    # here, not process substitution — that needs /dev/fd, which isn't always there if
+    # /proc isn't mounted
     [[ ${#apt_pkgs[@]} -gt 0 ]] && apt_pkgs=($(printf "%s\n" "${apt_pkgs[@]}" | sort -u))
     [[ ${#fetch_pkgs[@]} -gt 0 ]] && fetch_pkgs=($(printf "%s\n" "${fetch_pkgs[@]}" | sort -u))
     [[ ${#pip_pkgs[@]} -gt 0 ]] && pip_pkgs=($(printf "%s\n" "${pip_pkgs[@]}" | sort -u))
@@ -544,8 +528,7 @@ cmd_update() {
 self_update_check() {
     local self_path; self_path=$(command -v sage-pkg 2>/dev/null || echo "/usr/local/bin/sage-pkg")
     local self_dir; self_dir=$(dirname "$self_path")
-    # Download into a temp file in the SAME directory as the destination (same
-    # filesystem — required for the rename below to be atomic).
+    # download to a temp file on the same filesystem so the rename below is atomic
     local tmp; tmp=$(mktemp "$self_dir/.sage-pkg.XXXXXX" 2>/dev/null) || tmp=$(mktemp)
     if ! curl -sfL "$SAGE_PKG_SELF_URL" -o "$tmp"; then
         rm -f "$tmp"
@@ -558,17 +541,11 @@ self_update_check() {
     fi
     if ! cmp -s "$tmp" "$self_path" 2>/dev/null; then
         chmod 755 "$tmp"
-        # IMPORTANT: rename (mv), never cp/overwrite-in-place, here. This
-        # script is CURRENTLY RUNNING from $self_path — bash reads a script
-        # file incrementally from disk as it executes, not all at once into
-        # memory. Overwriting $self_path's bytes in place (cp) can corrupt
-        # THIS process's own execution mid-run (observed once: garbled
-        # "line N: c: command not found" errors right after the in-place
-        # overwrite). A same-filesystem rename swaps the directory entry to
-        # a new inode instead — this process keeps its already-open file
-        # descriptor pointing at the untouched OLD inode and finishes
-        # executing its original bytes safely; only the NEXT invocation of
-        # sage-pkg opens the new file.
+        # mv here, never cp. bash reads this script off disk as it runs, not all at
+        # once — overwriting it in place while it's executing corrupts itself mid-run
+        # (hit this once: garbled "command not found" errors right after). a rename just
+        # points the filename at a new inode, so this process keeps running off the old
+        # one until it exits — the next run picks up the new file.
         mv -f "$tmp" "$self_path"
         echo -e "  ${GRN}sage-pkg itself was updated${RST} to the latest version from GitHub."
     else
@@ -599,8 +576,7 @@ cmd_update_catalog() {
         return 1
     fi
 
-    # Version + changelog (best-effort — older sage-pkg installs upgrading for
-    # the first time won't have a local VERSION file yet, that's fine).
+    # version + changelog, best effort — first upgrade won't have a local VERSION file yet
     local old_version=""; [[ -f "$CATALOG_VERSION_FILE" ]] && old_version=$(cat "$CATALOG_VERSION_FILE")
     local new_version=""
     curl -sfL "$CATALOG_BASE/VERSION" -o "$tmp/VERSION" 2>/dev/null
