@@ -3,128 +3,398 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SageOS Package Catalog</title>
+<title>SageOS — a Linux distro that actually manages its own tools</title>
+<meta name="description" content="SageOS: a lean Debian-based security distro with mission-pack tool categories, a hybrid package manager (apt + GitHub + pip), and a self-updating catalog. No bloat, no reinstalling for updates.">
+<link rel="icon" href="assets/logo.png">
 <style>
-  :root {
-    --bg: #0d1117; --card: #161b22; --border: #30363d;
-    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950;
+  :root{
+    --bg: #0b0b12;
+    --bg-soft: #12121c;
+    --card: #15151f;
+    --border: #262635;
+    --text: #eef0f7;
+    --muted: #9497ab;
+    --violet: #7c83fd;
+    --magenta: #d63bd6;
+    --pink: #e879e8;
+    --radius: 14px;
   }
-  * { box-sizing: border-box; }
-  body {
-    background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    margin: 0; padding: 0 0 60px 0;
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    line-height:1.5;
+    overflow-x:hidden;
   }
-  header {
-    padding: 40px 24px 24px; max-width: 900px; margin: 0 auto;
+  a{color:inherit;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px;}
+
+  .glow{
+    position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background:
+      radial-gradient(600px circle at 15% 10%, rgba(124,131,253,0.20), transparent 60%),
+      radial-gradient(700px circle at 90% 25%, rgba(214,59,214,0.16), transparent 60%),
+      radial-gradient(500px circle at 50% 90%, rgba(232,121,232,0.10), transparent 60%);
   }
-  header h1 { font-size: 1.9rem; margin-bottom: 6px; }
-  header p { color: var(--muted); line-height: 1.5; max-width: 700px; }
-  .badges { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
-  .badge {
-    background: var(--card); border: 1px solid var(--border);
-    padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; color: var(--muted);
+
+  nav{
+    position:sticky; top:0; z-index:50;
+    backdrop-filter: blur(14px);
+    background: rgba(11,11,18,0.7);
+    border-bottom:1px solid var(--border);
   }
-  .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
-  .search { margin: 20px 0; }
-  .search input {
-    width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--card); color: var(--text); font-size: 0.95rem;
+  nav .wrap{display:flex; align-items:center; justify-content:space-between; height:68px;}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:18px; letter-spacing:-0.02em; text-decoration:none;}
+  .brand img{width:32px; height:32px; border-radius:8px;}
+  .navlinks{display:flex; align-items:center; gap:28px; font-size:14px; color:var(--muted);}
+  .navlinks a{text-decoration:none; transition:color .15s;}
+  .navlinks a:hover{color:var(--text);}
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:10px 18px; border-radius:999px; font-size:14px; font-weight:600;
+    text-decoration:none; border:1px solid transparent; cursor:pointer;
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+    white-space:nowrap;
   }
-  .cat {
-    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 18px 20px; margin-bottom: 14px;
+  .btn:hover{transform:translateY(-1px);}
+  .btn-primary{
+    background:linear-gradient(135deg, var(--violet), var(--magenta));
+    color:#fff; box-shadow:0 8px 24px -8px rgba(124,131,253,0.6);
   }
-  .cat-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
-  .cat-head h2 { font-size: 1.1rem; margin: 0; }
-  .cat-id { color: var(--accent); font-family: monospace; font-size: 0.85rem; }
-  .cat-desc { color: var(--muted); font-size: 0.9rem; margin: 6px 0 12px; }
-  .install-cmd {
-    font-family: monospace; background: #0d1117; border: 1px solid var(--border);
-    padding: 6px 10px; border-radius: 6px; font-size: 0.82rem; display: inline-block; margin-bottom: 10px;
-    color: var(--green);
+  .btn-primary:hover{box-shadow:0 10px 30px -6px rgba(214,59,214,0.55);}
+  .btn-ghost{background:var(--card); border:1px solid var(--border); color:var(--text);}
+  .btn-ghost:hover{border-color:#3a3a52;}
+  .btn-sm{padding:7px 14px; font-size:13px;}
+
+  header.hero{padding:100px 0 70px; text-align:center; position:relative;}
+  .kicker{
+    display:inline-flex; align-items:center; gap:8px;
+    font-size:13px; color:var(--muted); background:var(--card);
+    border:1px solid var(--border); padding:6px 14px; border-radius:999px;
+    margin-bottom:28px;
   }
-  .tools { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tool {
-    border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px;
-    font-size: 0.8rem; color: var(--text); cursor: default; position: relative;
+  .kicker .dot{width:6px; height:6px; border-radius:50%; background:linear-gradient(135deg,var(--violet),var(--magenta));}
+  h1{
+    font-size:clamp(38px, 6vw, 64px);
+    font-weight:800; letter-spacing:-0.03em; line-height:1.05; margin:0 0 22px;
   }
-  .tool[title]:hover { border-color: var(--accent); }
-  .tool .method { color: var(--muted); font-size: 0.72rem; margin-left: 4px; }
-  footer { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 40px; }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .hidden { display: none; }
+  h1 .accent{
+    background:linear-gradient(135deg, var(--violet), var(--pink));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .sub{
+    max-width:620px; margin:0 auto 40px; color:var(--muted); font-size:18px;
+  }
+  .hero-actions{display:flex; justify-content:center; gap:14px; flex-wrap:wrap; margin-bottom:52px;}
+
+  .terminal{
+    max-width:720px; margin:0 auto; text-align:left;
+    background:#0d0d14; border:1px solid var(--border); border-radius:var(--radius);
+    overflow:hidden; box-shadow:0 30px 60px -20px rgba(0,0,0,0.6);
+  }
+  .terminal .bar{
+    display:flex; align-items:center; gap:8px; padding:12px 16px;
+    background:#131320; border-bottom:1px solid var(--border);
+  }
+  .terminal .dot2{width:11px; height:11px; border-radius:50%;}
+  .d-red{background:#ff5f57;} .d-yellow{background:#ffbd2e;} .d-green{background:#28c840;}
+  .terminal .title{margin-left:10px; font-size:12px; color:var(--muted); font-family:monospace;}
+  .terminal pre{
+    margin:0; padding:22px 24px; font-family:"SF Mono", Menlo, Consolas, monospace;
+    font-size:14px; line-height:1.9; overflow-x:auto; color:#c9cbe0;
+  }
+  .terminal .prompt{color:#7fe8a4;}
+  .terminal .cmt{color:#5c5e73;}
+  .terminal .out{color:#9a9dbf;}
+  .terminal .hl{color:#e879e8;}
+
+  section{padding:90px 0;}
+  .section-head{max-width:640px; margin:0 auto 56px; text-align:center;}
+  .eyebrow{
+    font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--magenta); margin-bottom:14px;
+  }
+  h2{font-size:clamp(28px,4vw,40px); font-weight:800; letter-spacing:-0.02em; margin:0 0 14px;}
+  .section-head p{color:var(--muted); font-size:16px;}
+
+  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:20px;}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    padding:28px; transition: border-color .2s, transform .2s;
+  }
+  .card:hover{border-color:#3a3a52; transform:translateY(-3px);}
+  .card .icon{
+    width:42px; height:42px; border-radius:11px; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg, rgba(124,131,253,0.18), rgba(214,59,214,0.18));
+    margin-bottom:18px; border:1px solid var(--border);
+  }
+  .card h3{font-size:17px; font-weight:700; margin:0 0 8px; letter-spacing:-0.01em;}
+  .card p{font-size:14px; color:var(--muted); margin:0;}
+
+  .showcase{
+    background:var(--bg-soft); border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+  }
+  .shot-grid{display:grid; grid-template-columns:1.3fr 1fr; gap:20px;}
+  .shot{
+    border-radius:var(--radius); overflow:hidden; border:1px solid var(--border);
+    background:#000; position:relative;
+  }
+  .shot img{width:100%; display:block; height:100%; object-fit:cover;}
+  .shot-caption{
+    position:absolute; bottom:0; left:0; right:0; padding:14px 18px;
+    background:linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+    font-size:13px; color:#d6d7e6; font-weight:500;
+  }
+  .shot.tall{grid-row: span 2;}
+
+  .dl-grid{display:grid; grid-template-columns:1fr 1fr; gap:22px;}
+  .dl-card{
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    padding:32px; position:relative; overflow:hidden;
+  }
+  .dl-card.featured{border-color:rgba(214,59,214,0.4); box-shadow:0 0 0 1px rgba(214,59,214,0.15) inset;}
+  .dl-tag{
+    display:inline-block; font-size:11px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase;
+    padding:4px 10px; border-radius:6px; background:rgba(214,59,214,0.15); color:var(--pink); margin-bottom:16px;
+  }
+  .dl-card h3{font-size:22px; margin:0 0 6px; font-weight:800; letter-spacing:-0.01em;}
+  .dl-card .meta{color:var(--muted); font-size:14px; margin-bottom:22px;}
+  .dl-actions{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;}
+  .dl-links{font-size:13px; color:var(--muted); display:flex; gap:14px; flex-wrap:wrap;}
+  .dl-links a{text-decoration:underline; text-decoration-color:var(--border); text-underline-offset:3px;}
+  .dl-links a:hover{color:var(--text);}
+  .creds{
+    margin-top:60px; text-align:center; background:var(--card); border:1px solid var(--border);
+    border-radius:var(--radius); padding:22px; font-size:14px; color:var(--muted);
+  }
+  .creds code{background:#0d0d14; padding:2px 8px; border-radius:6px; color:var(--pink); font-family:monospace;}
+
+  .steps{display:grid; grid-template-columns:repeat(3,1fr); gap:24px;}
+  .step{padding:28px 0;}
+  .step .num{
+    font-size:13px; font-weight:800; color:var(--magenta); font-family:monospace; margin-bottom:14px;
+  }
+  .step h3{font-size:17px; margin:0 0 8px; font-weight:700;}
+  .step p{color:var(--muted); font-size:14px; margin:0;}
+
+  footer{border-top:1px solid var(--border); padding:48px 0; margin-top:20px;}
+  .foot-row{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;}
+  .foot-brand{display:flex; align-items:center; gap:10px; font-weight:700;}
+  .foot-brand img{width:26px; height:26px; border-radius:6px;}
+  .foot-links{display:flex; gap:24px; font-size:14px; color:var(--muted);}
+  .foot-links a{text-decoration:none;}
+  .foot-links a:hover{color:var(--text);}
+  .foot-note{font-size:13px; color:#5c5e73; margin-top:24px; text-align:center;}
+
+  @media (max-width: 860px){
+    .grid{grid-template-columns:1fr 1fr;}
+    .shot-grid{grid-template-columns:1fr;}
+    .shot.tall{grid-row:auto;}
+    .dl-grid{grid-template-columns:1fr;}
+    .steps{grid-template-columns:1fr;}
+    .navlinks{display:none;}
+  }
+  @media (max-width: 560px){
+    .grid{grid-template-columns:1fr;}
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>🛡️ SageOS Package Catalog</h1>
-  <p>
-    Browsable index of every <code>sage-pkg</code> mission pack — SageOS's built-in package
-    manager. Run <code>sage-pkg update-catalog</code> on any SageOS install to pull the latest
-    version of this exact list, or <code>sage-pkg install &lt;category&gt;</code> to install one.
-  </p>
-  <div class="badges">
-    <span class="badge" id="badge-version">catalog v—</span>
-    <span class="badge" id="badge-cats">— categories</span>
-    <span class="badge" id="badge-tools">— tools</span>
-    <span class="badge">generated <span id="badge-date">—</span></span>
-    <span class="badge"><a href="changelog.html">changelog</a></span>
-    <span class="badge"><a href="index.json">raw index.json</a></span>
-    <span class="badge"><a href="https://github.com/zackmsa777-a11y/sageos">source repo</a></span>
+<div class="glow"></div>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/logo.png" alt="SageOS logo">SageOS</a>
+    <div class="navlinks">
+      <a href="#features">Features</a>
+      <a href="#desktop">Desktop</a>
+      <a href="#download">Download</a>
+      <a href="packages.html">Packages</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="https://github.com/zackmsa777-a11y/sageos" target="_blank">GitHub</a>
+    </div>
+    <a class="btn btn-primary btn-sm" href="#download">Download</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="kicker"><span class="dot"></span> v5.3 — Debian bookworm base, x86_64</span>
+    <h1>A distro that keeps its<br><span class="accent">tools up to date, itself.</span></h1>
+    <p class="sub">SageOS is a lean, Debian-based security distro built around mission packs — curated tool categories you install with one command. No bloated base image, no full reinstall just to get an update.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#download">Get SageOS v5.3</a>
+      <a class="btn btn-ghost" href="packages.html">Browse the package catalog →</a>
+    </div>
+
+    <div class="terminal">
+      <div class="bar">
+        <span class="dot2 d-red"></span><span class="dot2 d-yellow"></span><span class="dot2 d-green"></span>
+        <span class="title">sage@sageos: ~</span>
+      </div>
+      <pre><span class="prompt">$</span> sage-pkg install web
+<span class="out">  Fetching feroxbuster from epi052/feroxbuster...</span>
+<span class="out">  <span class="hl">installed</span> feroxbuster</span>
+<span class="out">Done. 'Web Application Testing' tools are ready to use.</span>
+
+<span class="prompt">$</span> sage-pkg update
+<span class="cmt"># checks the catalog, batches apt upgrades, re-fetches GitHub</span>
+<span class="cmt"># binaries, upgrades pip tools — and updates sage-pkg itself, live</span>
+<span class="out">Catalog updated to v1.1 — 1 new tool. sage-pkg is up to date.</span></pre>
+    </div>
   </div>
 </header>
-<div class="container">
-  <div class="search">
-    <input id="searchbox" type="text" placeholder="Search tools or categories… (e.g. nmap, wireless, forensics)">
+
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Why SageOS</div>
+      <h2>Built around one idea: stay lean, update forever</h2>
+      <p>Most security distros ship everything up front and go stale the day you burn the ISO. SageOS ships almost nothing by default — and every mission pack, and the tool that manages them, updates itself over the network.</p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="icon">📦</div>
+        <h3>Mission packs</h3>
+        <p>Tools are grouped into categories — networking, web app testing, forensics, and more — installed on demand with <code>sage-pkg install &lt;pack&gt;</code>, not baked into a bloated base image.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🔀</div>
+        <h3>One manager, three sources</h3>
+        <p><code>sage-pkg</code> pulls from apt, GitHub releases, and pip through a single interface — and lets any tool override its install method with a simple <code>@apt</code>/<code>@fetch</code>/<code>@pip</code> tag.</p>
+      </div>
+      <div class="card">
+        <div class="icon">♻️</div>
+        <h3>Self-updating, no reinstall</h3>
+        <p><code>sage-pkg update</code> batch-upgrades everything you've installed — apt in one call, fresh binaries re-fetched, pip packages bumped — and updates sage-pkg's own code from GitHub in the process.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🗂️</div>
+        <h3>Live package catalog</h3>
+        <p>The full tool catalog is versioned and published on <a href="packages.html" style="color:var(--pink)">its own page</a> with a real changelog — see exactly what changed between catalog versions, no digging through commits.</p>
+      </div>
+      <div class="card">
+        <div class="icon">⚙️</div>
+        <h3>OpenRC, not systemd</h3>
+        <p>Boots on OpenRC's dependency-based service management for a fast, predictable startup — mission packs that pull in systemd as a side dependency get automatically corrected back.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🖥️</div>
+        <h3>Terminal-first, GUI optional</h3>
+        <p>The base ISO is terminal-only by design. Want a desktop? <code>sage-pkg install xfce</code> — or grab the XFCE edition, which boots straight to a graphical login.</p>
+      </div>
+    </div>
   </div>
-  <div id="cats"></div>
-</div>
+</section>
+
+<section id="desktop" class="showcase">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">The XFCE edition</div>
+      <h2>A real desktop when you want one</h2>
+      <p>Same base system, same mission packs, with XFCE and lightdm pre-installed. These are actual screenshots from the live build — not stock photos.</p>
+    </div>
+    <div class="shot-grid">
+      <div class="shot tall">
+        <img src="assets/screens/desktop.png" alt="SageOS XFCE desktop">
+        <div class="shot-caption">XFCE desktop, fully booted — panel, taskbar, file manager</div>
+      </div>
+      <div class="shot">
+        <img src="assets/screens/terminal.png" alt="fastfetch in xfce4-terminal">
+        <div class="shot-caption">xfce4-terminal running fastfetch</div>
+      </div>
+      <div class="shot">
+        <img src="assets/screens/greeter.png" alt="SageOS lightdm greeter">
+        <div class="shot-caption">lightdm graphical login</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Get it</div>
+      <h2>Two editions, same core</h2>
+      <p>Pick lean if you want to add packs yourself, or XFCE if you want a desktop out of the box. Both support x86_64 only, tested on QEMU and VirtualBox.</p>
+    </div>
+    <div class="dl-grid">
+      <div class="dl-card">
+        <span class="dl-tag">Base edition</span>
+        <h3>sageos-5.3.iso</h3>
+        <p class="meta">281 MB · terminal-only · add packs with sage-pkg</p>
+        <div class="dl-actions">
+          <a class="btn btn-primary btn-sm" href="https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3.iso">Download ISO</a>
+          <a class="btn btn-ghost btn-sm" href="magnet:?xt=urn:btih:613e1850d927ee4328bd2e510faeefca8b687427&dn=sageos-5.3.iso&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://tracker.openbittorrent.com:6969/announce">Magnet link</a>
+        </div>
+        <div class="dl-links">
+          <a href="https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3.iso.torrent">.torrent</a>
+          <a href="https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3-checksums.txt">checksums</a>
+          <a href="https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3-full-source.zip">full source</a>
+        </div>
+      </div>
+      <div class="dl-card featured">
+        <span class="dl-tag">XFCE edition</span>
+        <h3>sageos-5.3-xfce.iso</h3>
+        <p class="meta">408 MB · boots to graphical login · same mission packs</p>
+        <div class="dl-actions">
+          <a class="btn btn-primary btn-sm" href="https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3-xfce.iso">Download ISO</a>
+          <a class="btn btn-ghost btn-sm" href="magnet:?xt=urn:btih:7e1814ca1d1d5f3d4160de163adc8f722f2a4d2b&dn=sageos-5.3-xfce.iso&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://tracker.openbittorrent.com:6969/announce">Magnet link</a>
+        </div>
+        <div class="dl-links">
+          <a href="https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3-xfce.iso.torrent">.torrent</a>
+          <a href="https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3-checksums.txt">checksums</a>
+          <a href="https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3-full-source.zip">full source</a>
+        </div>
+      </div>
+    </div>
+    <div class="creds">Default login on both editions: <code>sage / sageos</code> or <code>root / sageos</code></div>
+  </div>
+</section>
+
+<section style="padding-top:0;">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">How it stays fresh</div>
+      <h2>Three commands, that's the whole workflow</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="num">01</div>
+        <h3>sage-pkg list</h3>
+        <p>See every mission pack and tool, pulled live from the versioned catalog on GitHub Pages.</p>
+      </div>
+      <div class="step">
+        <div class="num">02</div>
+        <h3>sage-pkg install &lt;pack&gt;</h3>
+        <p>Installs a whole category — apt packages, GitHub-release binaries, and pip tools — in one shot.</p>
+      </div>
+      <div class="step">
+        <div class="num">03</div>
+        <h3>sage-pkg update</h3>
+        <p>Upgrades everything installed, refreshes the catalog, and updates sage-pkg itself. No new ISO required.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <footer>
-  SageOS — a security-focused Linux distro. Built on Debian bookworm, terminal-first, mission packs on demand.
+  <div class="wrap">
+    <div class="foot-row">
+      <div class="foot-brand"><img src="assets/logo.png" alt="SageOS">SageOS</div>
+      <div class="foot-links">
+        <a href="packages.html">Packages</a>
+        <a href="changelog.html">Changelog</a>
+        <a href="https://github.com/zackmsa777-a11y/sageos">GitHub</a>
+        <a href="https://github.com/zackmsa777-a11y/sageos/releases">Releases</a>
+      </div>
+    </div>
+    <div class="foot-note">SageOS is built on Debian bookworm. Not affiliated with or endorsed by the Debian Project.</div>
+  </div>
 </footer>
-<script>
-fetch('index.json').then(r => r.json()).then(data => {
-  document.getElementById('badge-version').textContent = 'catalog v' + data.catalog_version;
-  document.getElementById('badge-cats').textContent = data.category_count + ' categories';
-  document.getElementById('badge-tools').textContent = data.total_tool_count + ' tools';
-  document.getElementById('badge-date').textContent = data.generated_utc.slice(0, 10);
 
-  const catsEl = document.getElementById('cats');
-
-  function render(filter) {
-    catsEl.innerHTML = '';
-    const f = (filter || '').toLowerCase();
-    data.categories.forEach(cat => {
-      const matchCat = cat.name.toLowerCase().includes(f) || cat.id.toLowerCase().includes(f) || cat.description.toLowerCase().includes(f);
-      const matchingTools = cat.tools.filter(t => t.name.toLowerCase().includes(f) || (t.description||'').toLowerCase().includes(f));
-      if (f && !matchCat && matchingTools.length === 0) return;
-      const toolsToShow = f && !matchCat ? matchingTools : cat.tools;
-
-      const div = document.createElement('div');
-      div.className = 'cat';
-      div.innerHTML = `
-        <div class="cat-head">
-          <h2>${cat.name}</h2>
-          <span class="cat-id">${cat.id}</span>
-        </div>
-        <div class="cat-desc">${cat.description}</div>
-        <div class="install-cmd">sage-pkg install ${cat.id}</div>
-        <div class="tools">
-          ${toolsToShow.map(t => `<span class="tool" title="${(t.description||'').replace(/"/g,'&quot;')}">${t.name}<span class="method">${t.install_method}</span></span>`).join('')}
-        </div>
-      `;
-      catsEl.appendChild(div);
-    });
-    if (catsEl.innerHTML === '') {
-      catsEl.innerHTML = '<p style="color:var(--muted)">No matches.</p>';
-    }
-  }
-
-  render('');
-  document.getElementById('searchbox').addEventListener('input', e => render(e.target.value));
-});
-</script>
 </body>
 </html>
