@@ -137,7 +137,7 @@
   .showcase{
     background:var(--bg-soft); border-top:1px solid var(--border); border-bottom:1px solid var(--border);
   }
-  .shot-grid{display:grid; grid-template-columns:1.3fr 1fr; gap:20px;}
+  .shot-grid{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
   .shot{
     border-radius:var(--radius); overflow:hidden; border:1px solid var(--border);
     background:#000; position:relative;
@@ -148,7 +148,6 @@
     background:linear-gradient(to top, rgba(0,0,0,0.85), transparent);
     font-size:13px; color:#d6d7e6; font-weight:500;
   }
-  .shot.tall{grid-row: span 2;}
 
   .dl-grid{display:grid; grid-template-columns:1fr 1fr; gap:22px;}
   .dl-card{
@@ -192,7 +191,6 @@
   @media (max-width: 860px){
     .grid{grid-template-columns:1fr 1fr;}
     .shot-grid{grid-template-columns:1fr;}
-    .shot.tall{grid-row:auto;}
     .dl-grid{grid-template-columns:1fr;}
     .steps{grid-template-columns:1fr;}
     .navlinks{display:none;}
@@ -298,13 +296,9 @@
       <p>Same base system, same mission packs, with XFCE and lightdm pre-installed. These are actual screenshots from the live build — not stock photos.</p>
     </div>
     <div class="shot-grid">
-      <div class="shot tall">
+      <div class="shot">
         <img src="assets/screens/desktop.png" alt="SageOS XFCE desktop">
         <div class="shot-caption">XFCE desktop, fully booted — panel, taskbar, file manager</div>
-      </div>
-      <div class="shot">
-        <img src="assets/screens/terminal.png" alt="fastfetch in xfce4-terminal">
-        <div class="shot-caption">xfce4-terminal running fastfetch</div>
       </div>
       <div class="shot">
         <img src="assets/screens/greeter.png" alt="SageOS lightdm greeter">
