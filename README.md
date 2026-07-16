@@ -1,108 +1,67 @@
 # SageOS
 
-**A lightweight, security-focused Linux distribution with modular "mission pack" tooling.**
+A lean, Debian-based Linux distro for security work, built around one idea: **the base system stays small, and everything else updates itself.**
 
-SageOS is a Debian bookworm-based live distro built for penetration testing and security work — without the bloat. Instead of shipping thousands of tools you'll never touch, SageOS ships a minimal, fast base system (OpenRC init, no systemd) and lets you install curated tool categories ("mission packs") on demand with `sage-pkg`, or through the friendly `sage-security` menu.
-
-![SageOS fastfetch splash](screenshots/fastfetch-v5.3-new-logo.png)
+**[Homepage & downloads](https://zackmsa777-a11y.github.io/sageos/) · [Package catalog](https://zackmsa777-a11y.github.io/sageos/packages.html) · [Changelog](https://zackmsa777-a11y.github.io/sageos/changelog.html) · [Releases](https://github.com/zackmsa777-a11y/sageos/releases)**
 
 ---
 
-## Features
+## What this is
 
-- **Live-boot ISO** — boots on real BIOS (ISOLINUX) and real UEFI (GRUB) hardware/VMs, no kernel-bypass tricks
-- **OpenRC init** — dependency-based service management, no systemd overhead
-- **Mission packs** — install only the tool categories you need, straight from Debian's official repos (plus curated GitHub/pip tools where Debian doesn't have them)
-- **`sage-pkg`** — a simple CLI wrapper that installs mission packs from apt, GitHub releases, or pip as needed
-- **`sage-security`** — a whiptail-based menu for browsing and installing packs visually, no CLI required
-- **Optional desktop** — `sage-pkg install xfce` adds a full XFCE + lightdm graphical desktop on top of the lean base, or grab the XFCE-preinstalled ISO edition
-- **Persistence** — `sage-persistence-setup` configures an overlayfs persistent volume on a second disk/USB partition
-- **Custom branding** — SageOS splash on login via `fastfetch`
-- **Small footprint** — curated tools only; extend via `sage-pkg`, not a kitchen-sink image
+SageOS is a personal distro project — built from Debian bookworm via `debootstrap`, running OpenRC instead of systemd, with tools organized into installable "mission pack" categories (networking, web app testing, forensics, etc.) rather than shipped all at once in a bloated ISO.
 
-## Screenshots
+It exists because most security-distro live images have the same problem: they ship every tool up front, the image is huge, and the moment you burn it to a USB stick it starts going stale. Six months later you're either re-downloading a multi-GB ISO or manually chasing updates tool by tool. SageOS tries to avoid that by keeping the base minimal and pushing everything — tool installs, tool updates, even the package manager's own code — through the network, on demand.
 
-| Boot splash (new logo) | Mission pack status | Security menu | XFCE desktop mission pack |
-|---|---|---|---|
-| ![Fastfetch splash](screenshots/fastfetch-v5.3-new-logo.png) | ![sage-pkg status](screenshots/sage-pkg-status-live-preview.png) | ![sage-security menu](screenshots/sage-security-menu-live-preview.png) | ![XFCE lightdm login](screenshots/xfce-lightdm-login-test.png) |
+## Principles
 
-## Mission Packs
+These are the actual design constraints the project holds itself to. If a change doesn't fit one of these, it doesn't belong in SageOS.
 
-| Category | Tools | Purpose |
-|---|---|---|
-| **networking** | nmap, masscan, arp-scan, netcat-openbsd, tcpdump, whois, dnsutils, traceroute, mtr-tiny | Network discovery & recon |
-| **web** | sqlmap, whatweb, dirb, gobuster, wfuzz, sslscan, wafw00f, fierce, wapiti | Web app testing |
-| **password** | john, hydra, crunch, hashcat | Password auditing & cracking |
-| **wireless** | aircrack-ng, macchanger, reaver | Wireless security testing |
-| **sniffing** | tshark, ettercap-text-only, dsniff, bettercap | Traffic analysis & MITM |
-| **forensics** | binwalk, foremost, libimage-exiftool-perl, sleuthkit, testdisk, volatility3 | Digital forensics |
-| **modern** | nuclei, httpx, subfinder, naabu, ffuf, feroxbuster, rustscan | Fast Go/Rust recon & fuzzing tools |
-| **secrets** | gitleaks, trufflehog | Find leaked keys/secrets in code & repos |
-| **ad** | netexec, secretsdump.py, GetUserSPNs.py, psexec.py, wmiexec.py, evil-winrm | Active Directory / Windows attacks (pre-installed by default) |
-| **windows** | smbmap, polenum, ldap-utils, samba-common-bin, nbtscan | Windows/SMB enumeration from Linux |
-| **osint** | recon-ng, amass, sherlock | OSINT & recon on people/domains/infra |
-| **opsec** | tor, torsocks, proxychains4, bleachbit, secure-delete, wipe, mat2, age | Anonymity, secret handling, evidence cleanup |
-| **malware** | yara, clamav, upx, capa | Malware detection & static analysis |
-| **reveng** | radare2, gdb, gdb-multiarch, ltrace, strace, ropper, pwntools | Reverse engineering & exploit dev |
-| **xfce** | xfce4, xorg, lightdm | Optional graphical desktop environment |
+1. **The base image stays small.** Nothing goes into the default ISO "just in case." If a tool isn't needed by every user on every boot, it's a mission pack, not baked-in.
+2. **Updates never require a new ISO.** `sage-pkg update` upgrades installed tools; `sage-pkg update-catalog` refreshes the tool list *and* upgrades `sage-pkg` itself, live, from GitHub. A SageOS install from six months ago should be able to fully catch up without a re-download.
+3. **One tool, three install sources, no seams.** `sage-pkg` wraps `apt`, GitHub release binaries, and `pip` behind a single interface. The user shouldn't need to know or care which one a given tool actually comes from.
+4. **GitHub is the single source of truth.** Not the sandbox this was built in, not whatever's sitting on a build machine's disk — the `main` branch and its releases. Every fix that matters is a commit, not a one-off patch to a running system.
+5. **Verify before shipping.** Every fix in this repo's history was confirmed in a real chroot or QEMU boot before being called done — not assumed correct from reading the diff.
+6. **x86_64 only, QEMU + VirtualBox tested.** No architecture sprawl, no untested hypervisor claims.
 
-Only **ad** ships pre-installed on the lean base ISO — every other pack is a `sage-pkg install <category>` away. Packages are pulled directly from official Debian bookworm repos where possible; a few modern tools (nuclei, gitleaks, amass, radare2, etc.) are fetched straight from upstream GitHub releases or pip since Debian doesn't package them.
+## Goals
 
-## Getting Started
+- Be a distro that's actually still useful a year after you installed it, without re-flashing anything.
+- Make the mission-pack catalog genuinely browsable and versioned — you should be able to see exactly what changed between catalog updates, not guess from commit history.
+- Keep the whole system honest about what's real: this README, the catalog, and the release notes should never claim something that hasn't actually been booted and checked.
+- Whether this goes anywhere beyond a personal project or not, the code and the process behind it should hold up to scrutiny on their own terms.
 
-### Download (v5.3)
+## What's in the box
 
-Two ISO editions:
+| Piece | What it does |
+|---|---|
+| `sage-pkg` | The package manager. `install`, `remove`, `list`, `search`, `update`, `update-catalog`. Hybrid apt/GitHub-release/pip backend, self-updating. |
+| `sage-security` | A whiptail-based menu UI in front of `sage-pkg`, for anyone who'd rather not remember command syntax. |
+| Mission packs | Categories defined in `src/categories.conf` — networking/recon, web app testing, forensics, and others. See the [live catalog](https://zackmsa777-a11y.github.io/sageos/packages.html) for the current full list. |
+| Two ISO editions | `sageos-X.X.iso` — lean, terminal-only base. `sageos-X.X-xfce.iso` — same base with XFCE + lightdm pre-installed, boots to a graphical login. |
+| GitHub Pages site | Homepage, browsable package catalog, and versioned changelog, all generated from the same `src/` files `sage-pkg` reads from — they can't drift apart. |
 
-- **`sageos-5.3.iso`** — the standard lean base. XFCE is available on-demand via `sage-pkg install xfce`.
-- **`sageos-5.3-xfce.iso`** — same base, with XFCE + lightdm **pre-installed and enabled**. Boots straight to a graphical desktop login.
+## Architecture, briefly
 
-- **Direct download:** [Releases](../../releases/latest)
-- **Torrents:** [sageos-5.3.iso.torrent](https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3.iso.torrent) / [sageos-5.3-xfce.iso.torrent](https://github.com/zackmsa777-a11y/sageos/releases/download/v5.3/sageos-5.3-xfce.iso.torrent) — both include a GitHub HTTP webseed, so they download even with zero peers
-- **Magnet links:** see the [v5.3 release notes](../../releases/tag/v5.3)
-- **Full source:** every release includes a `-full-source.zip` asset with the live-boot init script, boot configs, custom tooling, and a `MANIFEST.md` — everything needed to understand or rebuild the distro
+- **Base:** Debian bookworm rootfs via `debootstrap`, `APT::Install-Recommends` disabled to stay lean (this has bitten the project more than once — see `dbus-x11`/`xfce4-terminal` history in the changelog, both were Recommends-only deps that silently didn't get pulled in).
+- **Init:** OpenRC. Mission packs that pull in `systemd-sysv` as a side-effect dependency (XFCE via lightdm does) get their `/sbin/init → openrc-init` symlink restored automatically by the install hook.
+- **Boot:** hybrid BIOS/UEFI ISO (isolinux + GRUB via `xorriso`), with a custom `initramfs/init` that loads SATA/USB/NVMe/virtio storage drivers, finds the boot media, and either mounts a squashfs rootfs read-only or sets up an overlay with a persistence volume if one's present.
+- **Package manager:** `sage-pkg`, a single bash script. Category type in `categories.conf` (`apt` / `fetch` / `pip` / `mixed` / `builtin`) determines the default install path per mission pack, with per-tool `@apt`/`@fetch`/`@pip` overrides for exceptions.
+- **Catalog:** `src/sage-pkg-catalog/` mirrors the live config files sage-pkg fetches over the network; `tools/gen_catalog_index.py` generates the versioned JSON + changelog served on GitHub Pages from those same files.
 
-Default login: `sage` / `sageos` (or `root` / `sageos`).
+## Getting it
 
-### Boot it
+Two editions on the [releases page](https://github.com/zackmsa777-a11y/sageos/releases) — direct ISO download, magnet link, `.torrent`, checksums, and a full-source zip on every release. Default login on both: `sage`/`sageos` or `root`/`sageos`.
 
-**QEMU:**
-```bash
-qemu-system-x86_64 -m 2048 -cdrom sageos-5.3.iso -boot d
+```
+sage-pkg list                 # see every mission pack + tool
+sage-pkg install web          # install a whole category
+sage-pkg update                # upgrade everything installed, and sage-pkg itself
 ```
 
-**VirtualBox / real hardware:** write the ISO to a USB drive or attach it as a virtual CD — it boots via both legacy BIOS and UEFI. Only x86_64 is supported.
+## Status
 
-### Install a mission pack
-
-```bash
-sage-pkg list                 # see all available categories
-sage-pkg install networking   # install a category
-sage-pkg status                # see what's installed
-```
-
-Or launch the visual menu:
-
-```bash
-sage-security
-```
-
-### Set up persistence
-
-```bash
-sage-persistence-setup
-```
-
-Formats a second disk/partition as an overlayfs upper layer so changes survive a reboot.
-
-## Philosophy
-
-Most security distros try to ship every tool that ever existed. SageOS takes the opposite approach: a small, fast, reliable core — and mission packs you install only when you need them. Less bloat, faster boots, and a system you actually understand.
-
-## Building from Source
-
-SageOS is built via `debootstrap` + `chroot` on a Debian bookworm rootfs, packaged into a hybrid BIOS/UEFI ISO with `xorriso`. Build scripts, package definitions, boot configs, and the live-boot `initramfs/init` script all live in this repo — see each release's `-full-source.zip` for the exact snapshot used to build that ISO, plus a `MANIFEST.md` explaining the full boot flow (BIOS/UEFI → initramfs → squashfs+overlay → switch_root → OpenRC → login).
+Actively developed, single-maintainer personal project. Not audited, not hardened for production use — treat it the way you'd treat any small distro project: useful to poke at, not something to bet critical infrastructure on. Issues and forks welcome.
 
 ## License
 
-Built on Debian and open-source packages, each under their own respective licenses.
+See [LICENSE](LICENSE) if present in this repo, otherwise treat as all-rights-reserved by the author pending an explicit license being added.
